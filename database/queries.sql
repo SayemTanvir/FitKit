@@ -1,0 +1,1 @@
+-- FitKit required SQL queries for the DBMS project

@@ -1,0 +1,2 @@
+-- FitKit database triggers
+-- Example target: automatically award badges when activity milestones are reached.

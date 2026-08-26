@@ -1,0 +1,2 @@
+-- FitKit database views
+-- Example target: privacy-aware leaderboard views.

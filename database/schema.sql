@@ -1,0 +1,3 @@
+-- FitKit database schema
+-- Add tables for users, activity logs, exercises, friendships,
+-- challenges, challenge participants, badges, user badges and activity feed.
