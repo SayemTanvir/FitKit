@@ -1,0 +1,21 @@
+import Leaderboard from '../components/Leaderboard';
+import { achievements, rankInfo } from '../data/mockData';
+
+export default function Profile() {
+  return (
+    <div className="max-w-3xl space-y-6">
+      <div className="glass rounded-2xl p-8">
+        <h1 className="font-display font-semibold text-2xl text-white mb-2">Profile &amp; Settings</h1>
+        <p className="text-slate-400 text-sm">Manage your account, rank progress, and achievements.</p>
+      </div>
+      <Leaderboard
+        currentRank={rankInfo.currentRank}
+        nextRank={rankInfo.nextRank}
+        tenure={rankInfo.tenure}
+        xpCurrent={rankInfo.xpCurrent}
+        xpTarget={rankInfo.xpTarget}
+        achievements={achievements}
+      />
+    </div>
+  );
+}
