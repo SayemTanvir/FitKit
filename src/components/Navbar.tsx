@@ -1,21 +1,30 @@
 import { useState } from 'react';
-import { Menu, Lock, Droplet, Plus, Bell } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Menu, Bell, LogOut } from 'lucide-react';
 
 interface NavbarProps {
   onMenuClick: () => void;
-  userName?: string;
   onLogWorkout?: () => void;
   onLogWater?: () => void;
 }
 
 const notifications = [
-  'Jane Doe reacted 🔥 to your run',
-  'New Achievement: 10K Club unlocked',
-  'Rest day reminder for tomorrow',
+  'Database synced with FitKit backend',
+  'Role authorization verified',
 ];
 
-export default function Navbar({ onMenuClick, userName = 'Alex', onLogWorkout, onLogWater }: NavbarProps) {
+export default function Navbar({ onMenuClick }: NavbarProps) {
   const [showNotifications, setShowNotifications] = useState(false);
+  const navigate = useNavigate();
+
+  // Read authenticated user state
+  const user = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!) : null;
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    navigate('/login');
+  };
 
   return (
     <header className="sticky top-0 z-20 glass-strong border-b border-white/10">
@@ -29,24 +38,30 @@ export default function Navbar({ onMenuClick, userName = 'Alex', onLogWorkout, o
         </button>
 
         <div className="min-w-0">
-          <h1 className="font-display font-semibold text-base sm:text-xl text-white truncate">
-            Welcome back, {userName}! <span aria-hidden="true">👋</span>
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-400 hidden sm:block">Here's how your training is tracking today.</p>
+          <div className="flex items-center gap-2.5">
+            <h1 className="font-display font-semibold text-base sm:text-xl text-white truncate">
+              Welcome back, {user?.name || 'User'}!
+            </h1>
+            {/* Dynamic Role Badge */}
+            {user && (
+              <span
+                className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
+                  user.role === 'Admin'
+                    ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                    : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                }`}
+              >
+                {user.role}
+              </span>
+            )}
+          </div>
+          <p className="text-xs sm:text-sm text-slate-400 hidden sm:block">
+            {user?.role === 'Admin' ? 'System Administrator Portal' : "Here's how your training is tracking today."}
+          </p>
         </div>
 
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
-          <span className="hidden md:inline-flex items-center gap-1.5 text-xs font-medium text-slate-300 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full">
-            <Lock className="w-3.5 h-3.5" /> Friends Only
-          </span>
-
-          <button onClick={onLogWater} className="hidden sm:flex btn-cyan items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-xl">
-            <Droplet className="w-3.5 h-3.5" /> Log Water
-          </button>
-          <button onClick={onLogWorkout} className="btn-primary flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-xl">
-            <Plus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Log</span> Workout
-          </button>
-
+          {/* Notifications */}
           <div className="relative">
             <button
               onClick={() => setShowNotifications((v) => !v)}
@@ -54,7 +69,7 @@ export default function Navbar({ onMenuClick, userName = 'Alex', onLogWorkout, o
               aria-label="Notifications"
             >
               <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-gradient-to-br from-cyan-400 to-emerald-400 text-[10px] font-bold text-slate-900 flex items-center justify-center">
+              <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-cyan-400 text-[10px] font-bold text-slate-900 flex items-center justify-center">
                 {notifications.length}
               </span>
             </button>
@@ -69,6 +84,15 @@ export default function Navbar({ onMenuClick, userName = 'Alex', onLogWorkout, o
               </div>
             )}
           </div>
+
+          {/* Logout Button */}
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            <span className="hidden sm:inline">Logout</span>
+          </button>
         </div>
       </div>
     </header>

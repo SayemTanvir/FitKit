@@ -1,8 +1,9 @@
 import { Dumbbell, Timer, Play } from 'lucide-react';
+import type { ReactNode } from 'react';
 import ProgressBar from './ProgressBar';
 import type { ExerciseData } from '../types';
 
-const iconMap: Record<ExerciseData['icon'], JSX.Element> = {
+const iconMap: Record<ExerciseData['icon'], ReactNode> = {
   dumbbell: <Dumbbell className="w-4 h-4 text-lime-300" />,
   timer: <Timer className="w-4 h-4 text-cyan-300" />,
 };

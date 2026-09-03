@@ -1,5 +1,4 @@
--- 1. GEOGRAPHIC LOCATION SUBSYSTEM
- 
+-- 1. GEOGRAPHIC LOCATION SUBSYSTEM (Oracle HR Architecture)
 
 CREATE TABLE Region (
     region_id SERIAL PRIMARY KEY,
@@ -29,14 +28,14 @@ CREATE TABLE Address (
         ON DELETE CASCADE
 );
 
- 
--- 2. USER & ROLE SUBSYSTEM
- 
+
+-- 2. USER & ROLE-BASED ACCESS SUBSYSTEM (isA Hierarchy)
 
 CREATE TABLE users (
     user_id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     email VARCHAR(100) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
     phone_no VARCHAR(20),
     gender VARCHAR(10)
         CHECK (gender IN ('Male', 'Female')),
@@ -115,9 +114,8 @@ CREATE TABLE Notification (
         ON DELETE CASCADE
 );
 
- 
--- 3. EXERCISE CATALOG & SPECIALIZATION
- 
+
+-- 3. EXERCISE CATALOG & SPECIALIZATION (isA Hierarchy)
 
 CREATE TABLE Exercise (
     exercise_id SERIAL PRIMARY KEY,
@@ -160,9 +158,8 @@ CREATE TABLE FlexibilityExercise (
         ON DELETE CASCADE
 );
 
- 
--- 4. WORKOUT PLANS
- 
+
+-- 4. WORKOUT PLANS & SUGGESTIONS
 
 CREATE TABLE WorkoutPlan (
     plan_id SERIAL PRIMARY KEY,
@@ -228,9 +225,8 @@ CREATE TABLE MemberWorkoutPlan (
         ON DELETE CASCADE
 );
 
- 
--- 5. TRANSACTIONAL LOGS
- 
+
+-- 5. TRANSACTIONAL LOGS (MANUAL TRACKING)
 
 CREATE TABLE WorkoutEntry (
     entry_id SERIAL PRIMARY KEY,
@@ -280,9 +276,8 @@ CREATE TABLE HydrationEntry (
         ON DELETE CASCADE
 );
 
- 
+
 -- 6. GAMIFICATION, SOCIAL FEED & FRIENDSHIPS
- 
 
 CREATE TABLE Achievement (
     achievement_id SERIAL PRIMARY KEY,
@@ -363,28 +358,31 @@ CREATE TABLE Friendship (
         CHECK (user_id <> friend_id)
 );
 
- 
+
 -- 7. PERFORMANCE & UNIQUENESS INDEXES
- 
 
 CREATE INDEX idx_country_region ON Country(region_id);
 CREATE INDEX idx_address_country ON Address(country_id);
+CREATE INDEX idx_user_address ON users(address_id);
 CREATE INDEX idx_notification_user_date ON Notification(user_id, created_at DESC);
+CREATE INDEX idx_notification_user_unread ON Notification(user_id, is_read);
+CREATE INDEX idx_workout_plan_admin ON WorkoutPlan(admin_id);
+CREATE INDEX idx_plan_exercise_exercise ON WorkoutPlanExercise(exercise_id);
+CREATE INDEX idx_member_workout_plan_plan ON MemberWorkoutPlan(plan_id);
 CREATE INDEX idx_workout_entry_user_date ON WorkoutEntry(user_id, logged_at DESC);
 CREATE INDEX idx_workout_entry_exercise ON WorkoutEntry(exercise_id);
 CREATE INDEX idx_step_entry_user_date ON StepEntry(user_id, logged_at DESC);
 CREATE INDEX idx_hydration_entry_user_date ON HydrationEntry(user_id, logged_at DESC);
-CREATE INDEX idx_member_workout_plan_plan ON MemberWorkoutPlan(plan_id);
 CREATE INDEX idx_member_achievement_achievement ON MemberAchievement(achievement_id);
 CREATE INDEX idx_activity_feed_user_date ON ActivityFeed(user_id, created_at DESC);
 CREATE INDEX idx_activity_feed_created ON ActivityFeed(created_at DESC);
 CREATE INDEX idx_feed_reaction_feed ON FeedReaction(feed_id);
 CREATE INDEX idx_friendship_friend ON Friendship(friend_id);
+CREATE INDEX idx_friendship_status ON Friendship(status);
 
+-- Enforces single-entry mutual friendship pairs regardless of direction
 CREATE UNIQUE INDEX uq_friendship_unordered_pair
 ON Friendship (
     LEAST(user_id, friend_id),
     GREATEST(user_id, friend_id)
 );
-
- 
