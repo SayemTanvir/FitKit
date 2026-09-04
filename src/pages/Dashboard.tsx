@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Footprints, Flame, Droplet, Plus, Check } from 'lucide-react';
 import CircularProgress from '../components/CircularProgress';
 import ProgressBar from '../components/ProgressBar';
@@ -6,34 +6,144 @@ import StatCard from '../components/StatCard';
 import WorkoutCard from '../components/WorkoutCard';
 import SocialFeed from '../components/SocialFeed';
 import Leaderboard from '../components/Leaderboard';
-import { socialActivities, achievements, workoutPlan, rankInfo, dailyStats } from '../data/mockData';
+import { achievements, workoutPlan, rankInfo, dailyStats } from '../data/mockData';
+import { fetchDailySummary, fetchSocialFeed, logHydration, logSteps } from '../services/api';
 
 export default function Dashboard() {
-  const [hydration, setHydration] = useState(dailyStats.hydration);
-  const { steps, stepsGoal, calories, caloriesGoal, hydrationGoal, streakDays, streakBest } = dailyStats;
+  const [stats, setStats] = useState({
+    steps: 0,
+    stepsGoal: dailyStats.stepsGoal,
+    calories: 0,
+    caloriesGoal: dailyStats.caloriesGoal,
+    hydration: 0,
+    hydrationGoal: dailyStats.hydrationGoal,
+    streakDays: dailyStats.streakDays,
+    streakBest: dailyStats.streakBest,
+  });
 
-  const addWater = () => setHydration((v) => Math.min(v + 250, hydrationGoal));
-  const hydrationDone = hydration >= hydrationGoal;
+  const [isLoggingWater, setIsLoggingWater] = useState(false);
+  const [isLoggingSteps, setIsLoggingSteps] = useState(false);
+  const [feedActivities, setFeedActivities] = useState<any[]>([]);
+
+  const loadSummary = () => {
+    fetchDailySummary()
+      .then((data) => {
+        if (data) {
+          setStats((prev) => ({
+            ...prev,
+            calories: Number(data.calories || 0),
+            steps: Number(data.steps || 0),
+            hydration: Number(data.hydration || 0),
+            caloriesGoal: data.caloriesGoal || prev.caloriesGoal,
+            stepsGoal: data.stepsGoal || prev.stepsGoal,
+            hydrationGoal: data.hydrationGoal || prev.hydrationGoal,
+          }));
+        }
+      })
+      .catch((err) => console.error('Dashboard telemetry error:', err));
+  };
+
+  useEffect(() => {
+    loadSummary();
+
+    fetchSocialFeed()
+      .then((data) => {
+        if (Array.isArray(data)) {
+          const formatted = data.slice(0, 5).map((item) => {
+            const userName = item.user_name || item.author || item.user?.name || 'FitKit Member';
+            const messageText = item.content || item.message || item.description || 'Completed a workout set';
+            return {
+              id: String(item.id || item.feed_id || Math.random()),
+              content: messageText,
+              message: messageText,
+              activity: messageText,
+              user: {
+                name: typeof item.user === 'string' ? item.user : userName,
+                avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces',
+              },
+              userName,
+              timestamp: item.timestamp
+                ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : 'Just now',
+              time: item.timestamp
+                ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : 'Just now',
+              likes: 0,
+              comments: [],
+              reactions: [],
+              tags: [],
+              ...item,
+            };
+          });
+          setFeedActivities(formatted);
+        }
+      })
+      .catch((err) => console.error('Dashboard feed widget error:', err));
+  }, []);
+
+  const handleAddWater = async () => {
+    try {
+      setIsLoggingWater(true);
+      await logHydration(250);
+      setStats((prev) => ({
+        ...prev,
+        hydration: Math.min(prev.hydration + 250, prev.hydrationGoal),
+      }));
+    } catch (err) {
+      console.error('Failed to log hydration:', err);
+    } finally {
+      setIsLoggingWater(false);
+    }
+  };
+
+  const handleAddSteps = async () => {
+    try {
+      setIsLoggingSteps(true);
+      await logSteps(1000, true);
+      loadSummary();
+    } catch (err) {
+      console.error('Failed to log steps:', err);
+    } finally {
+      setIsLoggingSteps(false);
+    }
+  };
+
+  const hydrationDone = stats.hydration >= stats.hydrationGoal;
 
   return (
     <>
       {/* Stat cards */}
       <section className="grid grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
-        {/* Steps */}
-        <StatCard className="flex items-center gap-4">
-          <CircularProgress value={steps} max={stepsGoal} icon={<Footprints className="w-5 h-5 text-lime-300" />} />
-          <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-wide text-slate-400 font-medium">Daily Steps</p>
-            <p className="font-mono-fk font-bold text-xl text-white leading-tight mt-0.5">{steps.toLocaleString()}</p>
-            <p className="text-[11px] text-emerald-300 font-medium mt-0.5">
-              {steps >= stepsGoal
-                ? `Goal reached · ${Math.round((steps / stepsGoal) * 100)}%`
-                : `${Math.round((steps / stepsGoal) * 100)}% of goal`}
-            </p>
+        {/* Steps with Interactive Quick-Add */}
+        <StatCard className="flex flex-col justify-between">
+          <div className="flex items-center gap-4">
+            <CircularProgress
+              value={stats.steps}
+              max={stats.stepsGoal}
+              icon={<Footprints className="w-5 h-5 text-lime-300" />}
+            />
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] uppercase tracking-wide text-slate-400 font-medium">Daily Steps</p>
+              <p className="font-mono-fk font-bold text-xl text-white leading-tight mt-0.5">
+                {stats.steps.toLocaleString()}
+              </p>
+              <p className="text-[11px] text-emerald-300 font-medium mt-0.5">
+                {stats.steps >= stats.stepsGoal
+                  ? `Goal reached · ${Math.round((stats.steps / stats.stepsGoal) * 100)}%`
+                  : `${Math.round((stats.steps / stats.stepsGoal) * 100)}% of goal`}
+              </p>
+            </div>
           </div>
+          <button
+            onClick={handleAddSteps}
+            disabled={isLoggingSteps}
+            className="mt-3 w-full text-xs font-semibold py-1.5 rounded-lg bg-lime-400/10 hover:bg-lime-400/20 text-lime-300 border border-lime-400/30 flex items-center justify-center gap-1 transition-all cursor-pointer disabled:opacity-50"
+          >
+            <Plus className="w-3.5 h-3.5" /> 1,000 Steps
+          </button>
         </StatCard>
 
-        {/* Calories */}
+        {/* Calories (Aggregates Workout + Step Trigger Calories) */}
         <StatCard>
           <div className="flex items-center justify-between">
             <span className="w-9 h-9 rounded-xl bg-orange-400/10 border border-orange-400/20 flex items-center justify-center">
@@ -42,15 +152,20 @@ export default function Dashboard() {
             <p className="text-[11px] uppercase tracking-wide text-slate-400 font-medium">Calories</p>
           </div>
           <p className="font-mono-fk font-bold text-2xl text-white mt-3">
-            {calories} <span className="text-sm font-normal text-slate-400">kcal</span>
+            {stats.calories} <span className="text-sm font-normal text-slate-400">kcal</span>
           </p>
           <div className="mt-3">
-            <ProgressBar value={calories} max={caloriesGoal} gradientFrom="from-orange-400" gradientTo="to-amber-300" />
+            <ProgressBar
+              value={stats.calories}
+              max={stats.caloriesGoal}
+              gradientFrom="from-orange-400"
+              gradientTo="to-amber-300"
+            />
           </div>
-          <p className="text-[11px] text-slate-400 mt-1.5">of {caloriesGoal} kcal goal</p>
+          <p className="text-[11px] text-slate-400 mt-1.5">of {stats.caloriesGoal} kcal goal</p>
         </StatCard>
 
-        {/* Hydration */}
+        {/* Hydration (Persists directly to HydrationEntry) */}
         <StatCard>
           <div className="flex items-center justify-between">
             <span className="w-9 h-9 rounded-xl bg-cyan-400/10 border border-cyan-400/20 flex items-center justify-center">
@@ -59,15 +174,21 @@ export default function Dashboard() {
             <p className="text-[11px] uppercase tracking-wide text-slate-400 font-medium">Hydration</p>
           </div>
           <p className="font-mono-fk font-bold text-2xl text-white mt-3">
-            {hydration.toLocaleString()} <span className="text-sm font-normal text-slate-400">/ {hydrationGoal.toLocaleString()} ml</span>
+            {stats.hydration.toLocaleString()}{' '}
+            <span className="text-sm font-normal text-slate-400">/ {stats.hydrationGoal.toLocaleString()} ml</span>
           </p>
           <div className="mt-3">
-            <ProgressBar value={hydration} max={hydrationGoal} gradientFrom="from-cyan-400" gradientTo="to-blue-400" />
+            <ProgressBar
+              value={stats.hydration}
+              max={stats.hydrationGoal}
+              gradientFrom="from-cyan-400"
+              gradientTo="to-blue-400"
+            />
           </div>
           <button
-            onClick={addWater}
-            disabled={hydrationDone}
-            className="btn-cyan mt-3 w-full text-xs font-semibold py-1.5 rounded-lg flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+            onClick={handleAddWater}
+            disabled={hydrationDone || isLoggingWater}
+            className="btn-cyan mt-3 w-full text-xs font-semibold py-1.5 rounded-lg flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
           >
             {hydrationDone ? (
               <>
@@ -90,19 +211,19 @@ export default function Dashboard() {
             <p className="text-[11px] uppercase tracking-wide text-slate-400 font-medium">Active Streak</p>
           </div>
           <p className="font-mono-fk font-bold text-2xl text-white mt-3">
-            {streakDays} <span className="text-sm font-normal text-slate-400">Days</span>
+            {stats.streakDays} <span className="text-sm font-normal text-slate-400">Days</span>
           </p>
           <div className="flex gap-1 mt-3">
             {Array.from({ length: 7 }).map((_, i) => (
               <span
                 key={i}
                 className={`flex-1 h-1.5 rounded-full ${
-                  i < streakDays ? 'bg-gradient-to-r from-lime-400 to-emerald-400' : 'bg-white/10'
+                  i < stats.streakDays ? 'bg-gradient-to-r from-lime-400 to-emerald-400' : 'bg-white/10'
                 }`}
               />
             ))}
           </div>
-          <p className="text-[11px] text-slate-400 mt-1.5">Personal best: {streakBest} days</p>
+          <p className="text-[11px] text-slate-400 mt-1.5">Personal best: {stats.streakBest} days</p>
         </StatCard>
       </section>
 
@@ -119,7 +240,7 @@ export default function Dashboard() {
         </div>
 
         <div className="xl:col-span-5 xl:row-span-2">
-          <SocialFeed activities={socialActivities} />
+          <SocialFeed activities={feedActivities} />
         </div>
 
         <div className="xl:col-span-7">

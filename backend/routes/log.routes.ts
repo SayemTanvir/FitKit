@@ -4,22 +4,158 @@ import { query } from '../db';
 
 const router = Router();
 
+// Helper: extract user ID safely
+function resolveUserId(req: Request): number | null {
+  const queryId = req.query.user_id || req.query.userId;
+  if (queryId) return Number(queryId);
+
+  const bodyId = req.body?.user_id || req.body?.userId;
+  if (bodyId) return Number(bodyId);
+
+  if (req.headers.authorization) {
+    try {
+      const token = req.headers.authorization.split(' ')[1];
+      const decoded: any = jwt.verify(token, process.env.JWT_SECRET || 'secret_key');
+      return decoded.id || decoded.user_id || decoded.userId || null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+// GET /api/logs/summary - Live daily aggregates for Dashboard
+router.get('/summary', async (req: Request, res: Response) => {
+  try {
+    let userId = resolveUserId(req);
+    if (!userId) {
+      const fallbackUser = await query(`SELECT user_id FROM users LIMIT 1;`);
+      userId = fallbackUser.rows[0]?.user_id || 1;
+    }
+
+    // 1. Workout calories burned today
+    const workoutRes = await query(
+      `SELECT 
+         COALESCE(SUM(calories_burned), 0)::numeric AS workout_calories,
+         COUNT(entry_id)::int AS workouts_count
+       FROM workoutentry 
+       WHERE user_id = $1 AND logged_at::DATE = CURRENT_DATE;`,
+      [userId]
+    );
+
+    // 2. Step telemetry and step calories today (computed via trigger)
+    let steps = 0;
+    let stepCalories = 0;
+    try {
+      const stepRes = await query(
+        `SELECT 
+           COALESCE(SUM(steps_added), 0)::int AS total_steps,
+           COALESCE(SUM(calories_burned), 0)::numeric AS step_calories
+         FROM StepEntry 
+         WHERE user_id = $1 AND logged_at::DATE = CURRENT_DATE;`,
+        [userId]
+      );
+      steps = Number(stepRes.rows[0]?.total_steps || 0);
+      stepCalories = Number(stepRes.rows[0]?.step_calories || 0);
+    } catch {
+      // StepEntry table optional
+    }
+
+    // 3. Hydration intake today
+    let hydration = 0;
+    try {
+      const hydRes = await query(
+        `SELECT COALESCE(SUM(amount_ml), 0)::int AS total_water_ml
+         FROM HydrationEntry 
+         WHERE user_id = $1 AND logged_at::DATE = CURRENT_DATE;`,
+        [userId]
+      );
+      hydration = Number(hydRes.rows[0]?.total_water_ml || 0);
+    } catch {
+      // HydrationEntry table optional
+    }
+
+    const workoutCalories = Number(workoutRes.rows[0]?.workout_calories || 0);
+    const totalCalories = Math.round(workoutCalories + stepCalories);
+
+    return res.status(200).json({
+      calories: totalCalories,
+      workoutsCount: Number(workoutRes.rows[0]?.workouts_count || 0),
+      steps,
+      hydration,
+      caloriesGoal: 800,
+      stepsGoal: 10000,
+      hydrationGoal: 2800,
+    });
+  } catch (err: any) {
+    console.error('Error fetching dashboard summary:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch summary' });
+  }
+});
+
+// POST /api/logs/steps - Log steps (invokes trg_calc_step_calories & trg_check_step_goal)
+router.post(['/steps', '/step'], async (req: Request, res: Response) => {
+  try {
+    let userId = resolveUserId(req);
+    if (!userId) {
+      const fallbackUser = await query(`SELECT user_id FROM member LIMIT 1;`);
+      userId = fallbackUser.rows[0]?.user_id || 1;
+    }
+
+    const { steps_added, steps, is_public, isPublic } = req.body;
+    const stepCount = Number(steps_added || steps || 1000);
+    const shouldShare = Boolean(is_public ?? isPublic ?? false);
+
+    await query(`INSERT INTO member (user_id) VALUES ($1) ON CONFLICT DO NOTHING;`, [userId]).catch(() => {});
+
+    const result = await query(
+      `INSERT INTO StepEntry (user_id, steps_added, is_public)
+       VALUES ($1, $2, $3)
+       RETURNING *;`,
+      [userId, stepCount, shouldShare]
+    );
+
+    return res.status(201).json(result.rows[0]);
+  } catch (err: any) {
+    console.error('Error logging steps:', err);
+    return res.status(500).json({ error: err.message || 'Failed to record steps' });
+  }
+});
+
+// POST /api/logs/hydration - Log water consumption
+router.post('/hydration', async (req: Request, res: Response) => {
+  try {
+    let userId = resolveUserId(req);
+    if (!userId) {
+      const fallbackUser = await query(`SELECT user_id FROM member LIMIT 1;`);
+      userId = fallbackUser.rows[0]?.user_id || 1;
+    }
+
+    const { amount_ml, amount, is_public, isPublic } = req.body;
+    const waterAmount = Number(amount_ml || amount || 250);
+    const shouldShare = Boolean(is_public ?? isPublic ?? false);
+
+    await query(`INSERT INTO member (user_id) VALUES ($1) ON CONFLICT DO NOTHING;`, [userId]).catch(() => {});
+
+    const result = await query(
+      `INSERT INTO HydrationEntry (user_id, amount_ml, is_public)
+       VALUES ($1, $2, $3)
+       RETURNING *;`,
+      [userId, waterAmount, shouldShare]
+    );
+
+    return res.status(201).json(result.rows[0]);
+  } catch (err: any) {
+    console.error('Error logging hydration:', err);
+    return res.status(500).json({ error: err.message || 'Failed to record hydration' });
+  }
+});
+
 // GET /api/logs or /api/logs/workout
 router.get(['/', '/workout'], async (req: Request, res: Response) => {
   try {
-    let userId = req.query.user_id || req.query.userId;
+    const userId = resolveUserId(req);
 
-    if (!userId && req.headers.authorization) {
-      try {
-        const token = req.headers.authorization.split(' ')[1];
-        const decoded: any = jwt.verify(token, process.env.JWT_SECRET || 'secret_key');
-        userId = decoded.id || decoded.user_id || decoded.userId;
-      } catch (e) {
-        // Fallback if token verification fails
-      }
-    }
-
-    // Queries logged_at and target_muscle_group to prevent column errors
     const result = await query(
       `SELECT 
         w.entry_id AS id,
@@ -50,47 +186,20 @@ router.get(['/', '/workout'], async (req: Request, res: Response) => {
 // POST /api/logs or /api/logs/workout
 router.post(['/', '/workout'], async (req: Request, res: Response) => {
   try {
-    const { 
-      exercise_id, 
-      exerciseId, 
-      quantity, 
-      reps, 
-      duration, 
-      user_id, 
-      userId,
-      is_public,
-      isPublic,
-      share,
-      shareToFeed
-    } = req.body;
-
-    let resolvedUserId = user_id || userId;
-
-    if (!resolvedUserId && req.headers.authorization) {
-      try {
-        const token = req.headers.authorization.split(' ')[1];
-        const decoded: any = jwt.verify(token, process.env.JWT_SECRET || 'secret_key');
-        resolvedUserId = decoded.id || decoded.user_id || decoded.userId;
-      } catch (e) {
-        // Fallback
-      }
-    }
+    const { exercise_id, exerciseId, quantity, reps, duration, is_public, isPublic, share, shareToFeed } = req.body;
+    let resolvedUserId = resolveUserId(req);
 
     if (!resolvedUserId) {
       const fallbackUser = await query(`SELECT user_id FROM member LIMIT 1;`);
       resolvedUserId = fallbackUser.rows[0]?.user_id || 1;
     }
 
-    await query(
-      `INSERT INTO member (user_id) VALUES ($1) ON CONFLICT DO NOTHING;`,
-      [resolvedUserId]
-    ).catch(() => {});
+    await query(`INSERT INTO member (user_id) VALUES ($1) ON CONFLICT DO NOTHING;`, [resolvedUserId]).catch(() => {});
 
     const exId = exercise_id || exerciseId || 1;
     const qty = Number(quantity || reps || duration || 10);
     const shouldShare = Boolean(is_public ?? isPublic ?? share ?? shareToFeed ?? false);
 
-    // Save workout entry
     const logResult = await query(
       `INSERT INTO workoutentry (user_id, exercise_id, quantity, is_public)
        VALUES ($1, $2, $3, $4)
@@ -98,7 +207,6 @@ router.post(['/', '/workout'], async (req: Request, res: Response) => {
       [resolvedUserId, exId, qty, shouldShare]
     );
 
-    // ONLY post to social feed if the user checked "Share to Feed"
     if (shouldShare) {
       try {
         await query(`
@@ -138,11 +246,23 @@ router.post(['/', '/workout'], async (req: Request, res: Response) => {
 router.delete(['/:id', '/workout/:id'], async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
+    const userId = resolveUserId(req);
+
     if (!id || id === 'undefined') {
       return res.status(400).json({ error: 'Invalid ID provided for deletion' });
     }
 
-    await query(`DELETE FROM workoutentry WHERE entry_id = $1;`, [id]);
+    const deleteQuery = userId
+      ? `DELETE FROM workoutentry WHERE entry_id = $1 AND user_id = $2 RETURNING entry_id;`
+      : `DELETE FROM workoutentry WHERE entry_id = $1 RETURNING entry_id;`;
+
+    const params = userId ? [id, userId] : [id];
+    const result = await query(deleteQuery, params);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Log not found or unauthorized' });
+    }
+
     return res.status(200).json({ message: 'Log deleted successfully' });
   } catch (err: any) {
     console.error('Error deleting workout log:', err);

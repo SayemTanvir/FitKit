@@ -97,3 +97,30 @@ export async function fetchSocialFeed() {
   if (!res.ok) throw new Error('Failed to fetch social feed');
   return res.json();
 }
+
+export async function fetchDailySummary() {
+  const res = await fetch(`${BASE_URL}/logs/summary`, { headers: getAuthHeaders() });
+  if (!res.ok) throw new Error('Failed to fetch daily summary');
+  return res.json();
+}
+
+export async function logHydration(amount_ml: number = 250) {
+  const res = await fetch(`${BASE_URL}/logs/hydration`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ amount_ml }),
+  });
+  if (!res.ok) throw new Error('Failed to log hydration');
+  return res.json();
+}
+
+export async function logSteps(steps_added: number = 1000, is_public: boolean = true) {
+  const res = await fetch(`${BASE_URL}/logs/steps`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ steps_added, is_public }),
+  });
+  if (!res.ok) throw new Error('Failed to log steps');
+  return res.json();
+}
+
