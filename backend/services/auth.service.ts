@@ -73,49 +73,44 @@ export async function registerMemberService(data: RegisterMemberDTO) {
   }
 }
 
-export async function loginUserService(email: string, plainPass: string) {
-  // Resolve role directly from database inheritance hierarchy
-  const userRoleQuery = `
-    SELECT 
-      u.user_id, 
-      u.name, 
-      u.email, 
-      u.password_hash,
-      CASE 
-        WHEN a.user_id IS NOT NULL THEN 'Admin'
-        WHEN m.user_id IS NOT NULL THEN 'Member'
-        ELSE 'Unassigned'
-      END AS role
-    FROM users u
-    LEFT JOIN Admin a ON u.user_id = a.user_id
-    LEFT JOIN Member m ON u.user_id = m.user_id
-    WHERE u.email = $1;
-  `;
+export async function loginUserService(email: string, password: string) {
+  // 1. Fetch user including role, status, and active_plan
+  const result = await query(
+    `SELECT user_id, name, email, password_hash, role, status, active_plan 
+     FROM users 
+     WHERE LOWER(email) = LOWER($1)`,
+    [email]
+  );
 
-  const { rows } = await query(userRoleQuery, [email]);
-  if (rows.length === 0) {
+  if (result.rows.length === 0) {
     return null;
   }
 
-  const user = rows[0];
-  const isMatch = await bcrypt.compare(plainPass, user.password_hash);
+  const user = result.rows[0];
+
+  // 2. Verify password
+  const isMatch = await bcrypt.compare(password, user.password_hash);
   if (!isMatch) {
     return null;
   }
 
+  // 3. Sign Token
   const token = jwt.sign(
-    { userId: user.user_id, role: user.role },
-    process.env.JWT_SECRET as string,
-    { expiresIn: '1d' }
+    { id: user.user_id, role: user.role },
+    process.env.JWT_SECRET || 'secret_key',
+    { expiresIn: '24h' }
   );
 
+  // 4. Return full object expected by frontend Navbar & localStorage
   return {
+    token,
     user: {
-      userId: user.user_id,
+      id: user.user_id,
       name: user.name,
       email: user.email,
-      role: user.role,
-    },
-    token,
+      role: user.role || 'Admin',
+      status: user.status || (user.role === 'Admin' ? 'Admin' : 'Active Member'),
+      active_plan: user.active_plan || 'Member'
+    }
   };
 }

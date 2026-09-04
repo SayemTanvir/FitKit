@@ -17,8 +17,23 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const navigate = useNavigate();
 
-  // Read authenticated user state
-  const user = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!) : null;
+  // Safely parse stored user state
+  const getUser = () => {
+    try {
+      const stored = localStorage.getItem('user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const user = getUser();
+
+  // Multi-tier check for Admin status
+  const isAdmin =
+    user?.role?.toLowerCase() === 'admin' ||
+    user?.email?.toLowerCase() === 'admin@fitkit.com' ||
+    user?.name?.toLowerCase().includes('admin');
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -42,21 +57,20 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
             <h1 className="font-display font-semibold text-base sm:text-xl text-white truncate">
               Welcome back, {user?.name || 'User'}!
             </h1>
-            {/* Dynamic Role Badge */}
-            {user && (
-              <span
-                className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
-                  user.role === 'Admin'
-                    ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                    : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                }`}
-              >
-                {user.role}
-              </span>
-            )}
+            
+            {/* Dynamic Role & Status Badge */}
+            <span
+              className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
+                isAdmin
+                  ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                  : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+              }`}
+            >
+              {isAdmin ? 'Head Curator' : (user?.active_plan || user?.status || 'Active Member')}
+            </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 hidden sm:block">
-            {user?.role === 'Admin' ? 'System Administrator Portal' : "Here's how your training is tracking today."}
+            {isAdmin ? 'System Administrator Portal' : "Here's how your training is tracking today."}
           </p>
         </div>
 

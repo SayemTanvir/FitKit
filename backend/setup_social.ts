@@ -1,15 +1,22 @@
 import { query } from './db';
 
-async function syncFeed() {
+async function setupSocial() {
   try {
-    // 1. Backfill any rows where description was null
+    console.log('Ensuring ActivityFeed columns exist...');
+    await query(`
+      ALTER TABLE ActivityFeed 
+        ADD COLUMN IF NOT EXISTS description TEXT,
+        ADD COLUMN IF NOT EXISTS activity_type VARCHAR(50) DEFAULT 'workout';
+    `);
+
+    console.log('Syncing past records...');
     await query(`
       UPDATE ActivityFeed 
       SET description = message 
       WHERE description IS NULL AND message IS NOT NULL;
     `);
 
-    // 2. Trigger that populates BOTH description and message
+    console.log('Updating trigger function...');
     await query(`
       CREATE OR REPLACE FUNCTION fn_workout_to_feed()
       RETURNS TRIGGER AS $$
@@ -20,7 +27,7 @@ async function syncFeed() {
         IF NEW.is_public = TRUE THEN
           SELECT name INTO v_exercise_name FROM Exercise WHERE exercise_id = NEW.exercise_id;
 
-          v_msg := 'Completed ' || NEW.quantity || ' reps/mins of ' || COALESCE(v_exercise_name, 'an exercise') || ' (' || NEW.calories_burned || ' kcal)';
+          v_msg := 'Completed ' || NEW.quantity || ' reps/mins of ' || COALESCE(v_exercise_name, 'an exercise') || ' (' || COALESCE(NEW.calories_burned, 0) || ' kcal)';
 
           INSERT INTO ActivityFeed (user_id, activity_type, feed_type, description, message)
           VALUES (
@@ -36,12 +43,12 @@ async function syncFeed() {
       $$ LANGUAGE plpgsql;
     `);
 
-    console.log('ActivityFeed synchronized and trigger updated!');
+    console.log('ActivityFeed successfully updated and synced!');
     process.exit(0);
   } catch (err) {
-    console.error(err);
+    console.error('Setup social error:', err);
     process.exit(1);
   }
 }
 
-syncFeed();
+setupSocial();
