@@ -158,7 +158,9 @@ export default function Progress() {
                         <Flame className="w-4 h-4" /> {log.calories_burned} kcal
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 text-slate-400">{new Date(log.logged_at).toLocaleString()}</td>
+                    <td className="py-3.5 px-4 text-slate-400">
+                      {log.formatted_time || (log.logged_at ? new Date(log.logged_at).toLocaleString() : 'Just now')}
+                    </td>
                     <td className="py-3.5 px-4 text-right">
                       <button
                         onClick={() => handleDelete(log.entry_id)}
