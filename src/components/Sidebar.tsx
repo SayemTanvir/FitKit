@@ -19,6 +19,28 @@ const navItems = [
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [restOn, setRestOn] = useState(false);
 
+  // Parse active user details from local storage
+  const user = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('user') || '{}');
+    } catch {
+      return {};
+    }
+  })();
+
+  const userName = user.name || 'FitKit Member';
+  const userRole = user.role || user.status || 'Silver Member';
+
+  // Generate 2-letter initials dynamically from full name
+  const initials = userName
+    .trim()
+    .split(' ')
+    .filter(Boolean)
+    .map((part: string) => part[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) || 'FK';
+
   return (
     <aside
       className={`fixed lg:sticky top-0 left-0 h-screen w-72 z-40 flex flex-col glass-strong border-r border-white/10 shrink-0 transition-transform duration-300 ${
@@ -71,19 +93,19 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         ))}
       </nav>
 
-      {/* Profile summary */}
+      {/* Dynamic Profile Summary */}
       <div className="p-4 m-4 rounded-2xl glass">
         <div className="flex items-center gap-3">
           <div className="relative shrink-0">
             <div className="w-11 h-11 rounded-full bg-gradient-to-br from-cyan-400 to-emerald-500 flex items-center justify-center font-display font-bold text-slate-900 text-sm">
-              AM
+              {initials}
             </div>
             <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-[#0b0d11]" />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-white truncate">Alex Mercer</p>
-            <span className="inline-flex items-center gap-1 mt-0.5 text-[11px] font-medium text-slate-300 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full">
-              <Shield className="w-3 h-3" /> Silver Member
+            <p className="text-sm font-semibold text-white truncate">{userName}</p>
+            <span className="inline-flex items-center gap-1 mt-0.5 text-[11px] font-medium text-slate-300 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full truncate">
+              <Shield className="w-3 h-3 shrink-0" /> {userRole}
             </span>
           </div>
         </div>
