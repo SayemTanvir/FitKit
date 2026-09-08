@@ -1,6 +1,41 @@
 import { useEffect, useState } from 'react';
 import SocialFeed from '../components/SocialFeed';
 
+// Helper function for relative time ("12 minutes ago", "2 hours ago", etc.)
+function getRelativeTime(timestamp: string | Date) {
+  if (!timestamp) return 'Just now';
+  const now = new Date().getTime();
+  const past = new Date(timestamp).getTime();
+  const diffMs = now - past;
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins} minutes ago`;
+  if (diffHours < 24) return `${diffHours} hours ago`;
+  return `${diffDays} days ago`;
+}
+
+// Helper for initials
+function getInitials(name: string) {
+  return name
+    .trim()
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) || 'FK';
+}
+
+// Preset gradients matching your theme
+const gradients = [
+  'from-emerald-400 to-cyan-500',
+  'from-lime-400 to-emerald-500',
+  'from-cyan-400 to-blue-500',
+  'from-purple-400 to-pink-500',
+];
+
 export default function Social() {
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -17,28 +52,22 @@ export default function Social() {
       const data = await res.json();
 
       if (Array.isArray(data)) {
-        // Safe mapping to prevent undefined .map() crashes in SocialFeed.tsx
-        const safeActivities = data.map((item) => {
+        const safeActivities = data.map((item, index) => {
           const userName = item.user_name || item.author || item.user?.name || 'FitKit Member';
           const messageText = item.content || item.message || item.description || 'Completed a workout session';
 
           return {
             id: String(item.id || item.feed_id || Math.random()),
-            content: messageText,
+            name: userName,
             message: messageText,
-            activity: messageText,
-            user: {
-              name: typeof item.user === 'string' ? item.user : userName,
-              avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces'
-            },
-            userName: userName,
-            timestamp: item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
-            time: item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
-            likes: 0,
-            // Fallback empty arrays to prevent crashes on .map()
-            comments: [],
-            reactions: [],
-            tags: [],
+            timeAgo: getRelativeTime(item.timestamp),
+            initials: getInitials(userName),
+            avatarGradient: gradients[index % gradients.length],
+            reactions: [
+              { emoji: '🔥', count: 14 + (index % 5) },
+              { emoji: '💪', count: 6 + (index % 3) },
+              { emoji: '👏', count: 3 + (index % 2) }
+            ],
             ...item
           };
         });

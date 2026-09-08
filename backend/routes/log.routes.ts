@@ -93,7 +93,7 @@ router.get('/summary', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/logs/steps - Log steps (invokes trg_calc_step_calories & trg_check_step_goal)
+// POST /api/logs/steps - Log steps
 router.post(['/steps', '/step'], async (req: Request, res: Response) => {
   try {
     let userId = resolveUserId(req);
@@ -158,21 +158,21 @@ router.get(['/', '/workout'], async (req: Request, res: Response) => {
 
     const result = await query(
       `SELECT 
-        w.entry_id AS id,
-        w.entry_id AS log_id,
-        w.entry_id AS entry_id,
-        w.quantity,
-        w.calories_burned,
-        COALESCE(w.logged_at, NOW()) AS timestamp,
-        COALESCE(w.logged_at, NOW()) AS created_at,
-        COALESCE(w.logged_at, NOW()) AS date,
-        e.name AS exercise,
-        e.name AS exercise_name,
-        COALESCE(e.target_muscle_group, 'General') AS category
-       FROM workoutentry w
-       LEFT JOIN exercise e ON w.exercise_id = e.exercise_id
-       ${userId ? 'WHERE w.user_id = $1' : ''}
-       ORDER BY w.entry_id DESC;`,
+         w.entry_id AS id,
+         w.entry_id AS log_id,
+         w.entry_id AS entry_id,
+         w.quantity,
+         w.calories_burned,
+         TO_CHAR(COALESCE(w.logged_at, NOW()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS timestamp,
+         TO_CHAR(COALESCE(w.logged_at, NOW()), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
+         TO_CHAR(COALESCE(w.logged_at, NOW()), 'YYYY-MM-DD') AS date,
+         e.name AS exercise,
+         e.name AS exercise_name,
+         COALESCE(e.target_muscle_group, 'General') AS category
+        FROM workoutentry w
+        LEFT JOIN exercise e ON w.exercise_id = e.exercise_id
+        ${userId ? 'WHERE w.user_id = $1' : ''}
+        ORDER BY w.entry_id DESC;`,
       userId ? [userId] : []
     );
 
