@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 import { LayoutDashboard, Dumbbell, Activity, Users, Trophy, Settings, X, Shield, Moon } from 'lucide-react';
 
 interface SidebarProps {
@@ -93,22 +93,26 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         ))}
       </nav>
 
-      {/* Dynamic Profile Summary */}
+      {/* Dynamic Profile Summary (Clickable Card) */}
       <div className="p-4 m-4 rounded-2xl glass">
-        <div className="flex items-center gap-3">
+        <Link
+          to="/profile"
+          onClick={onClose}
+          className="flex items-center gap-3 group block focus:outline-none"
+        >
           <div className="relative shrink-0">
-            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-cyan-400 to-emerald-500 flex items-center justify-center font-display font-bold text-slate-900 text-sm">
+            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-cyan-400 to-emerald-500 flex items-center justify-center font-display font-bold text-slate-900 text-sm group-hover:scale-105 transition-transform">
               {initials}
             </div>
             <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-[#0b0d11]" />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-white truncate">{userName}</p>
+            <p className="text-sm font-semibold text-white truncate group-hover:text-lime-400 transition-colors">{userName}</p>
             <span className="inline-flex items-center gap-1 mt-0.5 text-[11px] font-medium text-slate-300 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full truncate">
               <Shield className="w-3 h-3 shrink-0" /> {userRole}
             </span>
           </div>
-        </div>
+        </Link>
 
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/10">
           <div className="flex items-center gap-1.5 text-xs text-slate-300">
@@ -119,7 +123,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             onClick={() => setRestOn((v) => !v)}
             aria-pressed={restOn}
             aria-label="Toggle rest mode"
-            className="w-10 h-[22px] rounded-full relative shrink-0 transition-colors"
+            className="w-10 h-[22px] rounded-full relative shrink-0 transition-colors cursor-pointer"
             style={{ background: restOn ? 'linear-gradient(90deg, #a3e635, #22d3ee)' : 'rgba(255,255,255,0.1)' }}
           >
             <span

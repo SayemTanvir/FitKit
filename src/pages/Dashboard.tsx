@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Footprints, Flame, Droplet, Plus, Check } from 'lucide-react';
+import { Footprints, Flame, Droplet, Plus, Check, Bell, X } from 'lucide-react';
 import CircularProgress from '../components/CircularProgress';
 import ProgressBar from '../components/ProgressBar';
 import StatCard from '../components/StatCard';
@@ -9,7 +9,7 @@ import Leaderboard from '../components/Leaderboard';
 import { achievements, workoutPlan, rankInfo, dailyStats } from '../data/mockData';
 import { fetchDailySummary, fetchSocialFeed, logHydration, logSteps } from '../services/api';
 
-// Helper function for relative time ("12 minutes ago", "2 hours ago", etc.)
+// Helper function for relative time
 function getRelativeTime(timestamp: string | Date) {
   if (!timestamp) return 'Just now';
   const now = new Date().getTime();
@@ -38,7 +38,6 @@ function getInitials(name: string) {
   );
 }
 
-// Preset gradients matching your theme
 const gradients = [
   'from-emerald-400 to-cyan-500',
   'from-lime-400 to-emerald-500',
@@ -46,7 +45,76 @@ const gradients = [
   'from-purple-400 to-pink-500',
 ];
 
+// Notification & Toast Dispatcher Helper
+export function pushNotification(title: string, message: string) {
+  const newNotif = {
+    id: Date.now(),
+    title,
+    message,
+    time: 'Just now',
+  };
+
+  // Update localStorage for Notification bell dropdown
+  const existing = JSON.parse(localStorage.getItem('fitkit_notifications') || '[]');
+  const updated = [newNotif, ...existing];
+  localStorage.setItem('fitkit_notifications', JSON.stringify(updated));
+
+  // Dispatch custom event so Navbar/Bell and Toasts instantly sync
+  window.dispatchEvent(new CustomEvent('fitkit_new_notification', { detail: newNotif }));
+}
+
+// Helper to calculate and persist actual streak based on active days
+function calculateStreak() {
+  const today = new Date().toISOString().split('T')[0];
+  const savedData = JSON.parse(localStorage.getItem('fitkit_active_streak') || '{}');
+  
+  let streakDays = savedData.streakDays ?? 1;
+  let streakBest = savedData.streakBest ?? 1;
+  const lastActiveDate = savedData.lastActiveDate;
+  let isNewLoginToday = false;
+
+  if (!lastActiveDate || lastActiveDate !== today) {
+    isNewLoginToday = true;
+    if (lastActiveDate) {
+      const lastDate = new Date(lastActiveDate);
+      const currentDate = new Date(today);
+      const diffTime = currentDate.getTime() - lastDate.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 3600 * 24));
+
+      if (diffDays === 1) {
+        streakDays += 1;
+      } else if (diffDays > 1) {
+        streakDays = 1;
+      }
+    }
+  }
+
+  streakBest = Math.max(streakBest, streakDays);
+
+  const updatedData = {
+    lastActiveDate: today,
+    streakDays,
+    streakBest,
+  };
+  localStorage.setItem('fitkit_active_streak', JSON.stringify(updatedData));
+
+  return { streakDays, streakBest, isNewLoginToday };
+}
+
 export default function Dashboard() {
+  const [activeToast, setActiveToast] = useState<{ title: string; message: string } | null>(null);
+
+  // Trigger Toast & Notification Bell simultaneously
+  const triggerAlert = (title: string, message: string) => {
+    setActiveToast({ title, message });
+    pushNotification(title, message);
+    setTimeout(() => {
+      setActiveToast(null);
+    }, 4500);
+  };
+
+  const streakInfo = calculateStreak();
+
   const [stats, setStats] = useState({
     steps: 0,
     stepsGoal: dailyStats.stepsGoal,
@@ -54,33 +122,60 @@ export default function Dashboard() {
     caloriesGoal: dailyStats.caloriesGoal,
     hydration: 0,
     hydrationGoal: dailyStats.hydrationGoal,
-    streakDays: dailyStats.streakDays,
-    streakBest: dailyStats.streakBest,
+    streakDays: streakInfo.streakDays,
+    streakBest: streakInfo.streakBest,
   });
 
   const [isLoggingWater, setIsLoggingWater] = useState(false);
   const [isLoggingSteps, setIsLoggingSteps] = useState(false);
   const [feedActivities, setFeedActivities] = useState<any[]>([]);
+  const [calorieGoalTriggered, setCalorieGoalTriggered] = useState(false);
+  const [stepsGoalTriggered, setStepsGoalTriggered] = useState(false);
 
   const loadSummary = () => {
     fetchDailySummary()
       .then((data) => {
         if (data) {
-          setStats((prev) => ({
-            ...prev,
-            calories: Number(data.calories || 0),
-            steps: Number(data.steps || 0),
-            hydration: Number(data.hydration || 0),
-            caloriesGoal: data.caloriesGoal || prev.caloriesGoal,
-            stepsGoal: data.stepsGoal || prev.stepsGoal,
-            hydrationGoal: data.hydrationGoal || prev.hydrationGoal,
-          }));
+          const currentStreak = calculateStreak();
+          setStats((prev) => {
+            const newCalories = Number(data.calories || 0);
+            const newSteps = Number(data.steps || 0);
+            const calGoal = data.caloriesGoal || prev.caloriesGoal;
+            const stepGoal = data.stepsGoal || prev.stepsGoal;
+
+            if (newCalories >= calGoal && !calorieGoalTriggered) {
+              setCalorieGoalTriggered(true);
+              triggerAlert('Calorie Goal Achieved! 🔥', `You reached your daily goal of ${calGoal} kcal!`);
+            }
+
+            if (newSteps >= stepGoal && !stepsGoalTriggered) {
+              setStepsGoalTriggered(true);
+              triggerAlert('Step Goal Achieved! 👟', `Fantastic job hitting your ${stepGoal.toLocaleString()} step goal!`);
+            }
+
+            return {
+              ...prev,
+              calories: newCalories,
+              steps: newSteps,
+              hydration: Number(data.hydration || 0),
+              caloriesGoal: calGoal,
+              stepsGoal: stepGoal,
+              hydrationGoal: data.hydrationGoal || prev.hydrationGoal,
+              streakDays: currentStreak.streakDays,
+              streakBest: currentStreak.streakBest,
+            };
+          });
         }
       })
       .catch((err) => console.error('Dashboard telemetry error:', err));
   };
 
   useEffect(() => {
+    // Check daily login streak notification on mount
+    if (streakInfo.isNewLoginToday) {
+      triggerAlert('Daily Login Streak 🔥', `Welcome back! Your active streak is now ${streakInfo.streakDays} days.`);
+    }
+
     loadSummary();
 
     fetchSocialFeed()
@@ -89,7 +184,6 @@ export default function Dashboard() {
           const formatted = data.slice(0, 5).map((item, index) => {
             const userName = item.user_name || item.author || item.user?.name || 'FitKit Member';
             let messageText = item.content || item.message || item.description || 'Completed a workout set';
-            //
             if (messageText.startsWith(userName)) {
               messageText = messageText.slice(userName.length).trim();
             }
@@ -109,6 +203,12 @@ export default function Dashboard() {
             };
           });
           setFeedActivities(formatted);
+
+          // Notify community feed update if there are activities
+          if (formatted.length > 0) {
+            const latest = formatted[0];
+            triggerAlert('Community Feed Update 🌐', `${latest.name} ${latest.message}`);
+          }
         }
       })
       .catch((err) => console.error('Dashboard feed widget error:', err));
@@ -122,6 +222,7 @@ export default function Dashboard() {
         ...prev,
         hydration: Math.min(prev.hydration + 250, prev.hydrationGoal),
       }));
+      triggerAlert('Hydration Logged 💧', 'Added 250ml of water to your daily intake.');
     } catch (err) {
       console.error('Failed to log hydration:', err);
     } finally {
@@ -134,6 +235,7 @@ export default function Dashboard() {
       setIsLoggingSteps(true);
       await logSteps(1000, true);
       loadSummary();
+      triggerAlert('Steps Logged 👟', 'Successfully added 1,000 steps to your daily progress!');
     } catch (err) {
       console.error('Failed to log steps:', err);
     } finally {
@@ -145,6 +247,22 @@ export default function Dashboard() {
 
   return (
     <>
+      {/* Toast Notification Banner */}
+      {activeToast && (
+        <div className="fixed top-6 right-6 z-50 animate-bounce bg-slate-900 border border-lime-400/40 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 backdrop-blur-md">
+          <span className="w-8 h-8 rounded-lg bg-lime-400/20 text-lime-300 flex items-center justify-center font-bold">
+            <Bell className="w-4 h-4" />
+          </span>
+          <div>
+            <p className="text-xs font-bold text-lime-300">{activeToast.title}</p>
+            <p className="text-xs text-slate-300">{activeToast.message}</p>
+          </div>
+          <button onClick={() => setActiveToast(null)} className="text-slate-400 hover:text-white ml-2 cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Stat cards */}
       <section className="grid grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
         {/* Steps with Interactive Quick-Add */}
@@ -170,13 +288,13 @@ export default function Dashboard() {
           <button
             onClick={handleAddSteps}
             disabled={isLoggingSteps}
-            className="mt-3 w-full text-xs font-semibold py-1.5 rounded-lg bg-lime-400/10 hover:bg-lime-400/20 text-lime-300 border border-lime-400/30 flex items-center justify-center gap-1 transition-all cursor-pointer disabled:opacity-50"
+            className="mt-3 w-full text-xs font-semibold py-1.5 rounded-lg bg-lime-400/15 hover:bg-lime-400/25 text-lime-300 border border-lime-400/30 flex items-center justify-center gap-1 transition-all cursor-pointer disabled:opacity-50"
           >
             <Plus className="w-3.5 h-3.5" /> 1,000 Steps
           </button>
         </StatCard>
 
-        {/* Calories (Aggregates Workout + Step Trigger Calories) */}
+        {/* Calories */}
         <StatCard>
           <div className="flex items-center justify-between">
             <span className="w-9 h-9 rounded-xl bg-orange-400/10 border border-orange-400/20 flex items-center justify-center">
@@ -198,7 +316,7 @@ export default function Dashboard() {
           <p className="text-[11px] text-slate-400 mt-1.5">of {stats.caloriesGoal} kcal goal</p>
         </StatCard>
 
-        {/* Hydration (Persists directly to HydrationEntry) */}
+        {/* Hydration */}
         <StatCard>
           <div className="flex items-center justify-between">
             <span className="w-9 h-9 rounded-xl bg-cyan-400/10 border border-cyan-400/20 flex items-center justify-center">
@@ -235,7 +353,7 @@ export default function Dashboard() {
           </button>
         </StatCard>
 
-        {/* Streak */}
+        {/* Active Streak */}
         <StatCard>
           <div className="flex items-center justify-between">
             <span className="w-9 h-9 rounded-xl bg-lime-400/10 border border-lime-400/20 flex items-center justify-center">
@@ -247,14 +365,18 @@ export default function Dashboard() {
             {stats.streakDays} <span className="text-sm font-normal text-slate-400">Days</span>
           </p>
           <div className="flex gap-1 mt-3">
-            {Array.from({ length: 7 }).map((_, i) => (
-              <span
-                key={i}
-                className={`flex-1 h-1.5 rounded-full ${
-                  i < stats.streakDays ? 'bg-gradient-to-r from-lime-400 to-emerald-400' : 'bg-white/10'
-                }`}
-              />
-            ))}
+            {Array.from({ length: 7 }).map((_, i) => {
+              const activeBars = Math.min(stats.streakDays, 7);
+              const isLit = i < activeBars; // Fills left to right
+              return (
+                <span
+                  key={i}
+                  className={`flex-1 h-1.5 rounded-full transition-all duration-300 ${
+                    isLit ? 'bg-gradient-to-r from-lime-400 to-emerald-400' : 'bg-white/10'
+                  }`}
+                />
+              );
+            })}
           </div>
           <p className="text-[11px] text-slate-400 mt-1.5">Personal best: {stats.streakBest} days</p>
         </StatCard>
@@ -268,7 +390,9 @@ export default function Dashboard() {
             weekLabel={workoutPlan.weekLabel}
             progressPct={workoutPlan.progressPct}
             exercises={workoutPlan.exercises}
-            onStart={() => console.log('Workout started')}
+            onStart={() => {
+              triggerAlert('Workout Started 🏋️‍♂️', 'Your full-body routine is now active.');
+            }}
           />
         </div>
 

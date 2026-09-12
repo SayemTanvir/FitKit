@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Users } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import type { SocialActivity } from '../types';
 
 interface SocialFeedProps {
@@ -34,7 +35,6 @@ function ActivityItem({ activity }: { activity: SocialActivity }) {
         if (r.emoji === emoji) {
           return { ...r, count: isActivating ? r.count + 1 : r.count - 1 };
         }
-        // if switching from a different active reaction, undo that one
         if (r.emoji === activeEmoji) {
           return { ...r, count: r.count - 1 };
         }
@@ -54,7 +54,13 @@ function ActivityItem({ activity }: { activity: SocialActivity }) {
         </div>
         <div className="min-w-0">
           <p className="text-sm text-slate-200">
-            <span className="font-semibold text-white">{activity.name}</span> {activity.message}
+            <Link
+              to={`/profile/${activity.id || 1}`}
+              className="font-semibold text-white hover:text-lime-400 transition-colors cursor-pointer"
+            >
+              {activity.name}
+            </Link>{' '}
+            {activity.message}
           </p>
           <p className="text-[11px] text-slate-500">{activity.timeAgo}</p>
         </div>
