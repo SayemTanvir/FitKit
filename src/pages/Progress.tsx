@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { fetchExercises, fetchMyWorkoutLogs, logWorkout, deleteWorkoutLog } from '../services/api';
 import { Flame, Trash2, CheckCircle } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function Progress() {
   const user = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!) : null;
@@ -39,18 +40,20 @@ export default function Progress() {
         quantity: Number(quantity),
         is_public: isPublic,
       });
+      toast.success('Workout logged successfully!');
       loadData();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message || 'Failed to record workout');
     }
   };
 
   const handleDelete = async (entryId: number) => {
     try {
       await deleteWorkoutLog(entryId);
+      toast.success('Workout log removed');
       loadData();
     } catch (err: any) {
-      alert(`Delete rejected: ${err.message}`);
+      toast.error(`Delete rejected: ${err.message}`);
     }
   };
 

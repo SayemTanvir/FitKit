@@ -88,7 +88,11 @@ export default function Dashboard() {
         if (Array.isArray(data)) {
           const formatted = data.slice(0, 5).map((item, index) => {
             const userName = item.user_name || item.author || item.user?.name || 'FitKit Member';
-            const messageText = item.content || item.message || item.description || 'Completed a workout set';
+            let messageText = item.content || item.message || item.description || 'Completed a workout set';
+            //
+            if (messageText.startsWith(userName)) {
+              messageText = messageText.slice(userName.length).trim();
+            }
             return {
               id: String(item.id || item.feed_id || Math.random()),
               name: userName,

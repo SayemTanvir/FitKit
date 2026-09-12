@@ -54,8 +54,11 @@ export default function Social() {
       if (Array.isArray(data)) {
         const safeActivities = data.map((item, index) => {
           const userName = item.user_name || item.author || item.user?.name || 'FitKit Member';
-          const messageText = item.content || item.message || item.description || 'Completed a workout session';
-
+          let messageText = item.content || item.message || item.description || 'Completed a workout session';
+          //
+          if (messageText.startsWith(userName)) {
+            messageText = messageText.slice(userName.length).trim();
+          }
           return {
             id: String(item.id || item.feed_id || Math.random()),
             name: userName,

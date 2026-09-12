@@ -7,6 +7,7 @@ import WorkoutPlans from './pages/WorkoutPlans';
 import Progress from './pages/Progress';
 import Social from './pages/Social';
 import Profile from './pages/Profile';
+import { Toaster } from 'react-hot-toast';
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const token = localStorage.getItem('token');
@@ -19,6 +20,17 @@ function RequireAuth({ children }: { children: ReactNode }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <Toaster 
+        position="top-right" 
+        toastOptions={{ 
+          style: { 
+            background: '#0f172a', 
+            color: '#fff', 
+            border: '1px solid rgba(255,255,255,0.1)',
+            fontSize: '14px'
+          } 
+        }} 
+      />
       <Routes>
         <Route path="/login" element={<Login />} />
         
