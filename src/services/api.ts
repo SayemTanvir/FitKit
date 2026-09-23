@@ -29,6 +29,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return data as T;
 }
 
+export const setMyPhoto=(photo_url:string)=>request<{photo_url:string}>('/auth/me/photo',{method:'PUT',headers:getAuthHeaders(),body:JSON.stringify({photo_url})});
+export const removeMyPhoto=()=>request<{photo_url:null}>('/auth/me/photo',{method:'DELETE',headers:getAuthHeaders()});
+
 export async function loginUser(credentials: { email: string; password: string }) {
   return request<any>('/auth/login', {
     method: 'POST',
@@ -72,6 +75,18 @@ export async function fetchExercises() {
   return request<any[]>('/exercises', { headers: getAuthHeaders() });
 }
 
+export async function saveExerciseLibraryItem(data: Record<string, unknown>, id?: number) {
+  return request<any>(id ? `/exercises/${id}` : '/exercises', {
+    method: id ? 'PUT' : 'POST', headers: getAuthHeaders(), body: JSON.stringify(data),
+  });
+}
+
+export async function setExerciseActive(id: number, is_active: boolean) {
+  return request<any>(`/exercises/${id}/archive`, {
+    method: 'PATCH', headers: getAuthHeaders(), body: JSON.stringify({ is_active }),
+  });
+}
+
 export async function fetchWorkoutPlans() {
   return request<any[]>('/plans', { headers: getAuthHeaders() });
 }
@@ -81,13 +96,32 @@ export async function createWorkoutPlan(plan: {
   target_level: string;
   goal_category: string;
   duration_weeks: number;
-  exercise_id: number;
-  target_quantity: number;
+  exercise_id?: number;
+  target_quantity?: number;
 }) {
   return request<any>('/plans', {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify(plan),
+  });
+}
+
+export async function addPlanExercise(planId: number, detail: {
+  exercise_id: number;
+  day_number: number;
+  target_quantity: number;
+}) {
+  return request<any>(`/plans/${planId}/exercises`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(detail),
+  });
+}
+
+export async function removePlanExercise(planId: number, exerciseId: number, dayNumber: number) {
+  return request<{ message: string }>(`/plans/${planId}/exercises/${exerciseId}/${dayNumber}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
   });
 }
 
@@ -145,6 +179,15 @@ export async function fetchSocialFeed() {
   return request<any[]>('/social/feed', { headers: getAuthHeaders() });
 }
 
+export async function fetchLeaderboard(filters: {
+  metric: 'steps' | 'calories' | 'workouts';
+  period: 'today' | 'week' | 'month' | 'all';
+  level: 'All' | 'Beginner' | 'Intermediate' | 'Advanced';
+}) {
+  const params = new URLSearchParams(filters);
+  return request<any[]>(`/social/leaderboard?${params}`, { headers: getAuthHeaders() });
+}
+
 export async function fetchDailySummary() {
   return request<any>('/logs/summary', { headers: getAuthHeaders() });
 }
@@ -180,7 +223,7 @@ export async function deleteHydrationEntry(entryId: number) {
   });
 }
 
-export async function logSteps(steps_added = 1000, is_public = true) {
+export async function logSteps(steps_added = 1000, is_public = false) {
   return request<any>('/logs/steps', {
     method: 'POST',
     headers: getAuthHeaders(),

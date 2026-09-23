@@ -1,0 +1,101 @@
+import dotenv from 'dotenv';
+import pg from 'pg';
+
+const base=process.env.FITKIT_API_URL||'http://localhost:5000/api';
+async function call(path,token,method='GET',body,expected=200){
+  const response=await fetch(`${base}${path}`,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})});
+  const data=await response.json().catch(()=>null);
+  if(response.status!==expected)throw new Error(`${method} ${path}: expected ${expected}, got ${response.status} ${JSON.stringify(data)}`);
+  return data;
+}
+async function upload(token,purpose){
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lZkAAAAASUVORK5CYII=','base64');
+  const response=await fetch(`${base}/community/media/${purpose}`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'image/png'},body:png});
+  const data=await response.json();if(response.status!==201)throw new Error(`Upload failed: ${response.status} ${JSON.stringify(data)}`);
+  return data.url;
+}
+dotenv.config({path:'backend/.env',quiet:true});
+const pool=new pg.Pool({host:process.env.DB_HOST||'localhost',port:Number(process.env.DB_PORT||5432),database:process.env.DB_NAME||'FitKitDB',user:process.env.DB_USER||'postgres',password:String(process.env.DB_PASSWORD||'')});
+const users=[];let reportId;
+try{
+  const stamp=Date.now();
+  for(const suffix of ['a','b']){
+    const member=await call('/auth/register',null,'POST',{name:`Community Demo ${suffix}`,email:`community-${stamp}-${suffix}@example.test`,password:'SmokeTest@123',gender:'Female',birth_date:'2000-01-01',height_cm:165,weight_kg:60,fitness_level:'Beginner'},201);
+    users.push(member);
+  }
+  const admin=await call('/auth/login',null,'POST',{email:'admin@fitkit.com',password:'Password@123'});
+  const [a,b]=users;
+  const aId=a.user.id,bId=b.user.id;
+  const invalid=await fetch(`${base}/community/media/avatar`,{method:'POST',headers:{Authorization:`Bearer ${b.token}`,'Content-Type':'image/png'},body:Buffer.from('not an image')});
+  if(invalid.status!==400)throw new Error('Invalid image bytes were accepted.');
+  const oversized=await fetch(`${base}/community/media/avatar`,{method:'POST',headers:{Authorization:`Bearer ${b.token}`,'Content-Type':'image/png'},body:Buffer.alloc(3*1024*1024+1)});
+  if(oversized.status!==413)throw new Error('Oversized image was accepted.');
+  const unauthenticated=await fetch(`${base}/community/media/avatar`,{method:'POST',headers:{'Content-Type':'image/png'},body:Buffer.from('not an image')});
+  if(unauthenticated.status!==401)throw new Error('Unauthenticated image upload was accepted.');
+  const avatar=await upload(b.token,'avatar');
+  const ownProfile=await call(`/community/members/${bId}`,b.token);
+  await call('/community/me',b.token,'PUT',{username:ownProfile.profile.username,bio:'Smoke avatar',is_private:true,dm_policy:'Friends',interests:[],photo_url:avatar});
+  const account=await call('/auth/me',b.token);
+  if(account.user.photo_url!==avatar)throw new Error('Account profile picture was not synchronized.');
+  const avatarResponse=await fetch(`${base.replace(/\/api$/,'')}${avatar}`,{headers:{Authorization:`Bearer ${a.token}`}});
+  if(avatarResponse.status!==200||avatarResponse.headers.get('content-type')!=='image/png')throw new Error('Avatar upload or authenticated delivery failed.');
+  await call('/community/me',a.token,'PUT',{username:(await call(`/community/members/${aId}`,a.token)).profile.username,bio:'',is_private:true,dm_policy:'Friends',interests:[],photo_url:avatar},403);
+  const discovery=await call('/community/members?q=Community%20Demo',a.token);
+  if(!discovery.some((item)=>item.user_id===bId))throw new Error('Member discovery failed.');
+  await call(`/community/members/${bId}/follow`,a.token,'POST',undefined,201);
+  const requested=await call('/community/requests',b.token);
+  if(!requested.follows.some((item)=>item.user_id===aId))throw new Error('Private follow request missing.');
+  const postImage=await upload(b.token,'post');
+  const post=await call('/community/posts',b.token,'POST',{body:'Private-account public post for smoke test',visibility:'Public',image_url:postImage},201);
+  await call('/community/posts',a.token,'POST',{body:'Bad image reference',visibility:'Public',image_url:postImage},403);
+  const privateImage=await fetch(`${base.replace(/\/api$/,'')}${postImage}`,{headers:{Authorization:`Bearer ${a.token}`}});
+  if(privateImage.status!==404)throw new Error('Private post image leaked.');
+  const before=await call('/community/posts?scope=discover',a.token);
+  if(before.some((item)=>item.post_id===post.post_id))throw new Error('Private account post leaked before follow acceptance.');
+  await call(`/community/posts/${post.post_id}`,a.token,'GET',undefined,404);
+  await call(`/community/members/${aId}/follow`,b.token,'PATCH',{action:'accept'});
+  const after=await call(`/community/posts?scope=user&user=${bId}`,a.token);
+  if(!after.some((item)=>item.post_id===post.post_id))throw new Error('Accepted follower cannot see post.');
+  const single=await call(`/community/posts/${post.post_id}`,a.token);
+  if(single.post_id!==post.post_id)throw new Error('Post notification destination failed.');
+  if(single.image_url!==postImage||single.photo_url!==avatar)throw new Error('Image references missing from post feed.');
+  const visibleImage=await fetch(`${base.replace(/\/api$/,'')}${postImage}`,{headers:{Authorization:`Bearer ${a.token}`}});
+  if(visibleImage.status!==200)throw new Error('Authorized follower could not load post image.');
+  let reactions=await call(`/community/posts/${post.post_id}/reaction`,a.token,'POST',{reaction_type:'Fire'});
+  if(reactions.fire_count!==1||reactions.my_reaction!=='Fire')throw new Error('Fire reaction failed.');
+  reactions=await call(`/community/posts/${post.post_id}/reaction`,a.token,'POST',{reaction_type:'Flex'});
+  if(reactions.fire_count!==0||reactions.flex_count!==1||reactions.my_reaction!=='Flex')throw new Error('Reaction switching failed.');
+  reactions=await call(`/community/posts/${post.post_id}/reaction`,a.token,'POST',{reaction_type:'Flex'});
+  if(reactions.flex_count!==0||reactions.my_reaction!==null)throw new Error('Reaction toggling failed.');
+  await call(`/community/posts/${post.post_id}/like`,a.token,'POST');
+  await call(`/community/posts/${post.post_id}/comments`,a.token,'POST',{body:'Great progress!'},201);
+  await call(`/community/members/${bId}/friend`,a.token,'POST',undefined,201);
+  const pendingProfile=await call(`/community/members/${aId}`,b.token);
+  if(pendingProfile.relationship.friendship_direction!=='Incoming')throw new Error('Incoming friend request direction missing.');
+  await call(`/community/members/${aId}/friend`,b.token,'PATCH',{action:'accept'});
+  const friends=await call('/community/friends',a.token);
+  if(!friends.some((item)=>item.user_id===bId))throw new Error('Friendship acceptance failed.');
+  const message=await call(`/community/messages/${bId}`,a.token,'POST',{body:'Hello from smoke test'},201);
+  const inbox=await call(`/community/messages/${aId}`,b.token);
+  if(!inbox.some((item)=>item.message_id===message.message_id))throw new Error('Message not persisted.');
+  const conversations=await call('/community/conversations',b.token);
+  if(!conversations.some((item)=>item.other_id===aId))throw new Error('Conversation list missing sender.');
+  const alerts=await call('/community/notifications',b.token);
+  if(!alerts.some((item)=>item.title==='New message'))throw new Error('Message notification missing.');
+  const report=await call('/community/reports',a.token,'POST',{target_type:'Post',target_id:post.post_id,reason:'Disposable moderation test'},201);reportId=report.report_id;
+  const queue=await call('/community/moderation/reports',admin.token);
+  if(!queue.some((item)=>item.report_id===reportId))throw new Error('Admin moderation queue missing report.');
+  await call(`/community/moderation/reports/${reportId}`,admin.token,'PATCH',{status:'Dismissed',note:'Smoke test'});
+  await call(`/community/members/${bId}/block`,a.token,'POST');
+  const blockedImage=await fetch(`${base.replace(/\/api$/,'')}${postImage}`,{headers:{Authorization:`Bearer ${a.token}`}});
+  if(blockedImage.status!==404)throw new Error('Blocked member retained post-image access.');
+  await call(`/community/messages/${aId}`,b.token,'POST',{body:'Should not deliver'},403);
+  await call('/auth/me/photo',b.token,'DELETE');
+  const removed=await call(`/community/members/${bId}`,b.token);
+  if(removed.profile.photo_url!==null)throw new Error('Avatar removal failed.');
+  console.log('Community smoke passed: avatar/gallery upload and removal, privacy, reactions, follow, friendship, posts, messaging, moderation.');
+}finally{
+  if(reportId)await pool.query('DELETE FROM ModerationAction WHERE report_id=$1',[reportId]);
+  for(const user of users)await pool.query('DELETE FROM users WHERE user_id=$1',[user.user.id]);
+  await pool.end();
+}

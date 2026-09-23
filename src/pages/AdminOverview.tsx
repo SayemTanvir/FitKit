@@ -1,0 +1,9 @@
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+
+export default function AdminOverview(){
+  const [stats,setStats]=useState<Record<string,number>|null>(null),[error,setError]=useState('');
+  useEffect(()=>{fetch(`${import.meta.env.VITE_API_URL||'/api'}/admin/overview`,{headers:{Authorization:`Bearer ${localStorage.getItem('token')||''}`}}).then(async(response)=>{const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not load admin overview');setStats(data);}).catch((e)=>setError(e.message));},[]);
+  const labels:Record<string,string>={members:'Members',exercises:'Active exercises',programmes:'Programmes',published_versions:'Published versions',enrollments:'Enrollments',completed_sessions:'Completed sessions',posts:'Community posts',messages:'Messages',open_reports:'Open reports'};
+  return <div className="space-y-6"><div className="glass rounded-2xl p-6"><h1 className="font-display text-2xl font-semibold text-white">Admin Overview</h1><p className="text-sm text-slate-400 mt-1">Current counts from the FitKit database.</p></div>{error&&<p role="alert" className="text-red-300">{error}</p>}{!stats&&!error&&<p className="text-slate-400">Loading overview...</p>}{stats&&<div className="grid grid-cols-2 md:grid-cols-3 gap-4">{Object.entries(labels).map(([key,label])=><div key={key} className="glass rounded-2xl p-5"><p className="text-xs text-slate-400">{label}</p><p className="font-display text-3xl font-semibold text-white mt-2">{Number(stats[key]||0).toLocaleString()}</p></div>)}</div>}<div className="flex flex-wrap gap-3 text-sm"><Link to="/programmes" className="text-cyan-300">Manage programmes →</Link><Link to="/exercise-library" className="text-cyan-300">Exercise library →</Link><Link to="/moderation" className="text-cyan-300">Moderation queue →</Link></div></div>;
+}

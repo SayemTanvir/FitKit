@@ -5,6 +5,20 @@ ALTER TABLE Member
     ADD COLUMN IF NOT EXISTS daily_calorie_goal INT NOT NULL DEFAULT 800,
     ADD COLUMN IF NOT EXISTS daily_hydration_goal INT NOT NULL DEFAULT 2800;
 
+-- Older exercise seeds had no subtype rows, so they appeared as "General".
+-- Restore their intended categories for plan curation and filtering.
+INSERT INTO StrengthExercise (exercise_id, equipment_needed)
+SELECT exercise_id, 'Bodyweight'
+FROM Exercise
+WHERE name IN ('Push-ups', 'Squats', 'Plank (seconds)')
+ON CONFLICT (exercise_id) DO NOTHING;
+
+INSERT INTO CardioExercise (exercise_id, mets_score)
+SELECT exercise_id, 8.0
+FROM Exercise
+WHERE name IN ('Treadmill Running', 'Jumping Jacks')
+ON CONFLICT (exercise_id) DO NOTHING;
+
 -- Restore missing profile fields on the original demo accounts created by
 -- earlier development scripts. Existing non-null values are preserved.
 UPDATE users

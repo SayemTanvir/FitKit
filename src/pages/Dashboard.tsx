@@ -112,6 +112,7 @@ export default function Dashboard() {
     exercises: [],
   });
   const [hasActivePlan, setHasActivePlan] = useState(false);
+  const [activePlanCount, setActivePlanCount] = useState(0);
   const [membership, setMembership] = useState({
     currentRank: 'Member',
     nextRank: 'Silver Member',
@@ -170,6 +171,7 @@ export default function Dashboard() {
               timeAgo: relativeTime(item.timestamp),
               initials: initials(name),
               avatarGradient: gradients[index % gradients.length],
+              photoUrl: item.photo_url,
               reactions: [
                 { emoji: '🔥', count: Number(item.fire_count || 0) },
                 { emoji: '💪', count: Number(item.flex_count || 0) },
@@ -185,6 +187,8 @@ export default function Dashboard() {
     fetchWorkoutPlans()
       .then((plans) => {
         if (plans.length === 0) return;
+        const activeCount = plans.filter((item) => item.is_active).length;
+        setActivePlanCount(activeCount);
         const plan = plans.find((item) => item.is_active) || plans[0];
         const active = Boolean(plan.is_active);
         setHasActivePlan(active);
@@ -338,7 +342,7 @@ export default function Dashboard() {
       <WeeklyAnalytics data={weeklyData} />
 
       <section className="grid grid-cols-1 xl:grid-cols-12 gap-5 sm:gap-6">
-        <div className="xl:col-span-7"><WorkoutCard label={hasActivePlan ? 'Active Plan' : 'Suggested Plan'} actionLabel={isMember && hasActivePlan ? "Log Today's Workout" : 'Browse Workout Plans'} planName={activePlan.name} weekLabel={activePlan.weekLabel} progressPct={activePlan.progressPct} exercises={activePlan.exercises} onStart={() => navigate(isMember && hasActivePlan ? '/activity' : '/workouts')} /></div>
+        <div className="xl:col-span-7"><WorkoutCard label={hasActivePlan ? `${activePlanCount} Active ${activePlanCount === 1 ? 'Plan' : 'Plans'}` : 'Suggested Plan'} actionLabel={isMember && hasActivePlan ? "Log Today's Workout" : 'Browse Workout Plans'} planName={activePlan.name} weekLabel={activePlan.weekLabel} progressPct={activePlan.progressPct} exercises={activePlan.exercises} onStart={() => navigate(isMember && hasActivePlan ? '/activity' : '/workouts')} /></div>
         <div className="xl:col-span-5 xl:row-span-2"><SocialFeed activities={feedActivities} /></div>
         <div className="xl:col-span-7"><Leaderboard currentRank={membership.currentRank} nextRank={membership.nextRank} tenure={membership.tenure} xpCurrent={membership.progress} xpTarget={membership.target} achievements={achievements} /></div>
       </section>

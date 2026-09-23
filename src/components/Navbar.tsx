@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu, Bell, LogOut, Trash2 } from 'lucide-react';
+import { notifications as fetchCommunityNotifications } from '../services/community';
+import UserAvatar from './UserAvatar';
 
 interface NavbarProps {
   onMenuClick: () => void;
@@ -24,6 +26,7 @@ function notificationKey() {
 export default function Navbar({ onMenuClick }: NavbarProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [databaseUnread, setDatabaseUnread] = useState(0);
   const navigate = useNavigate();
   const [user, setUser] = useState(readStoredUser());
 
@@ -46,10 +49,18 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
     window.addEventListener('fitkit_new_notification', handleNewNotification);
     const handleUserUpdate = () => setUser(readStoredUser());
     window.addEventListener('fitkit_user_updated', handleUserUpdate);
+    window.addEventListener('fitkit_profile_photo_changed', handleUserUpdate);
     return () => {
       window.removeEventListener('fitkit_new_notification', handleNewNotification);
       window.removeEventListener('fitkit_user_updated', handleUserUpdate);
+      window.removeEventListener('fitkit_profile_photo_changed', handleUserUpdate);
     };
+  }, []);
+  useEffect(() => {
+    const refresh = () => fetchCommunityNotifications().then((items) => setDatabaseUnread(items.filter((item) => !item.is_read).length)).catch(() => {});
+    refresh();
+    const timer = window.setInterval(refresh, 15000);
+    return () => window.clearInterval(timer);
   }, []);
   const clearNotifications = () => {
     setNotifications([]);
@@ -78,6 +89,7 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
 
         <div className="min-w-0">
           <div className="flex items-center gap-2.5">
+            <UserAvatar name={user?.name||'User'} photoUrl={user?.photo_url} className="w-8 h-8 hidden sm:inline-flex" />
             <h1 className="font-display font-semibold text-base sm:text-xl text-white truncate">
               Welcome back, {user?.name || 'User'}!
             </h1>
@@ -90,7 +102,7 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
                   : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
               }`}
             >
-              {isAdmin ? 'Head Curator' : (user?.active_plan || user?.status || 'Active Member')}
+              {isAdmin ? 'Head Curator' : 'Active Member'}
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 hidden sm:block">
@@ -107,9 +119,9 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
               aria-label="Notifications"
             >
               <Bell className="w-5 h-5" />
-              {notifications.length > 0 && (
+              {notifications.length + databaseUnread > 0 && (
                 <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-cyan-400 text-[10px] font-bold text-slate-900 flex items-center justify-center">
-                  {notifications.length}
+                  {notifications.length + databaseUnread}
                 </span>
               )}
             </button>
@@ -127,6 +139,9 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
                   )}
                 </div>
                 <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+                  <button type="button" onClick={() => { setShowNotifications(false); navigate('/notifications'); }} className="w-full text-left px-3 py-2 rounded-xl bg-cyan-500/10 text-cyan-200 text-xs font-semibold">
+                    Open notification centre {databaseUnread > 0 ? `(${databaseUnread} unread)` : ''}
+                  </button>
                   {notifications.length === 0 ? (
                     <p className="text-xs text-slate-500 text-center py-6">No new notifications</p>
                   ) : (

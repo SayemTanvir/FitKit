@@ -8,6 +8,7 @@
     "dev:web": "vite",
     "dev:api": "tsx watch backend/server.ts",
     "start:api": "tsx backend/server.ts",
+    "migrate:existing": "node scripts/migrate.mjs",
     "build": "tsc -b && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.backend.json",
     "lint": "oxlint",

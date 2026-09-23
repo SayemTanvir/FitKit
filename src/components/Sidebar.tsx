@@ -1,5 +1,7 @@
 import { NavLink, Link } from 'react-router-dom';
-import { LayoutDashboard, Dumbbell, Activity, Users, Trophy, Settings, X, Shield } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { LayoutDashboard, Dumbbell, Activity, Users, Trophy, Settings, X, Shield, MessageCircle, Bell } from 'lucide-react';
+import UserAvatar from './UserAvatar';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -8,14 +10,24 @@ interface SidebarProps {
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/workouts', label: 'Workouts & Plans', icon: Dumbbell, end: false },
+  { to: '/programmes', label: 'Explore Programmes', icon: Dumbbell, end: true },
+  { to: '/my-programmes', label: 'My Programmes', icon: Activity, end: false },
+  { to: '/exercise-library', label: 'Exercise Library', icon: Dumbbell, end: false, adminOnly: true },
   { to: '/activity', label: 'Daily Activity Logs', icon: Activity, end: false },
-  { to: '/social', label: 'Social Feed', icon: Users, end: false },
-  { to: '/achievements', label: 'Achievements & Ranks', icon: Trophy, end: false },
+  { to: '/community', label: 'Community', icon: Users, end: true },
+  { to: '/community/people', label: 'Find Members', icon: Users, end: false },
+  { to: '/messages', label: 'Messages', icon: MessageCircle, end: false },
+  { to: '/notifications', label: 'Notifications', icon: Bell, end: false },
+  { to: '/community/settings', label: 'Community Privacy', icon: Shield, end: false },
+  { to: '/moderation', label: 'Moderation', icon: Shield, end: false, adminOnly: true },
+  { to: '/leaderboard', label: 'Leaderboard', icon: Trophy, end: false },
+  { to: '/achievements', label: 'Achievements & Ranks', icon: Shield, end: false },
   { to: '/settings', label: 'Settings', icon: Settings, end: false },
 ];
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
+  const [,refreshPhoto]=useState(0);
+  useEffect(()=>{const refresh=()=>refreshPhoto((value)=>value+1);window.addEventListener('fitkit_profile_photo_changed',refresh);return()=>window.removeEventListener('fitkit_profile_photo_changed',refresh);},[]);
 
   // Parse active user details from local storage
   const user = (() => {
@@ -29,15 +41,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const userName = user.name || 'FitKit Member';
   const userRole = user.role || 'Member';
 
-  // Generate 2-letter initials dynamically from full name
-  const initials = userName
-    .trim()
-    .split(' ')
-    .filter(Boolean)
-    .map((part: string) => part[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2) || 'FK';
 
   return (
     <aside
@@ -71,7 +74,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       {/* Nav */}
       <nav className="flex-1 px-4 space-y-1.5 mt-2 overflow-y-auto">
         <p className="px-3 text-[11px] uppercase tracking-widest text-slate-500 font-semibold mb-2">Menu</p>
-        {navItems.map(({ to, label, icon: Icon, end }) => (
+        {navItems.filter((item) => !('adminOnly' in item && item.adminOnly) || userRole === 'Admin').map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}
@@ -99,9 +102,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           className="flex items-center gap-3 group block focus:outline-none"
         >
           <div className="relative shrink-0">
-            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-cyan-400 to-emerald-500 flex items-center justify-center font-display font-bold text-slate-900 text-sm group-hover:scale-105 transition-transform">
-              {initials}
-            </div>
+            <UserAvatar name={userName} photoUrl={user.photo_url} gradient="from-cyan-400 to-emerald-500" textClass="font-display text-sm" className="w-11 h-11 group-hover:scale-105 transition-transform" />
             <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-[#0b0d11]" />
           </div>
           <div className="min-w-0">

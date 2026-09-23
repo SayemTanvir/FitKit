@@ -2,6 +2,11 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import pool, { query } from '../db';
 
+function jwtSecret() {
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET.startsWith('replace_with_')) throw new Error('Set JWT_SECRET in backend/.env.');
+  return process.env.JWT_SECRET;
+}
+
 interface RegisterMemberDTO {
   name: string;
   email: string;
@@ -68,12 +73,13 @@ export async function registerMemberService(data: RegisterMemberDTO) {
       newUser.user_id,
       data.daily_step_goal || 10000,
     ]);
+    await client.query('INSERT INTO MemberProfile (user_id,username) VALUES ($1,$2)', [newUser.user_id, `member${newUser.user_id}`]);
 
     await client.query('COMMIT');
 
     const token = jwt.sign(
       { userId: newUser.user_id, role: 'Member' },
-      process.env.JWT_SECRET || 'secret_key',
+      jwtSecret(),
       { expiresIn: '1d' }
     );
 
@@ -99,6 +105,7 @@ export async function loginUserService(email: string, password: string) {
     `SELECT
        u.user_id,
        u.name,
+       COALESCE(mp.photo_url,u.profile_photo_url) AS photo_url,
        u.email,
        u.password_hash,
        CASE
@@ -117,6 +124,7 @@ export async function loginUserService(email: string, password: string) {
      FROM users u
      LEFT JOIN Admin a ON a.user_id = u.user_id
      LEFT JOIN Member m ON m.user_id = u.user_id
+     LEFT JOIN MemberProfile mp ON mp.user_id = u.user_id
      WHERE LOWER(u.email) = LOWER($1)`,
     [email]
   );
@@ -139,7 +147,7 @@ export async function loginUserService(email: string, password: string) {
 
   const token = jwt.sign(
     { userId: user.user_id, role: user.role },
-    process.env.JWT_SECRET || 'secret_key',
+    jwtSecret(),
     { expiresIn: '24h' }
   );
 
@@ -148,6 +156,7 @@ export async function loginUserService(email: string, password: string) {
     user: {
       id: user.user_id,
       name: user.name,
+      photo_url: user.photo_url,
       email: user.email,
       role: user.role,
       status: user.role === 'Admin' ? user.admin_role : 'Active Member',
@@ -161,6 +170,7 @@ export async function getUserProfileService(userId: number) {
     `SELECT
        u.user_id AS id,
        u.name,
+       COALESCE(mp.photo_url,u.profile_photo_url) AS photo_url,
        u.email,
        u.gender,
        TO_CHAR(u.birth_date, 'YYYY-MM-DD') AS birth_date,
@@ -191,6 +201,7 @@ export async function getUserProfileService(userId: number) {
      FROM users u
      LEFT JOIN Admin a ON a.user_id = u.user_id
      LEFT JOIN Member m ON m.user_id = u.user_id
+     LEFT JOIN MemberProfile mp ON mp.user_id = u.user_id
      LEFT JOIN LATERAL (
        SELECT mr.rank_name
        FROM MembershipRank mr

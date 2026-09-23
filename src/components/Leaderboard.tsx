@@ -2,6 +2,7 @@ import { Trophy, Shield, Footprints, Flame, Dumbbell, Lock } from 'lucide-react'
 import ProgressBar from './ProgressBar';
 import type { Achievement, AchievementIcon } from '../types';
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 
 const iconMap: Record<AchievementIcon, ReactNode> = {
   footprints: <Footprints className="w-4 h-4 text-lime-300" />,
@@ -30,8 +31,8 @@ export default function Leaderboard({
   return (
     <div className="glass rounded-2xl p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="font-display font-semibold text-lg text-white">Leaderboard &amp; Ranks</h2>
-        <Trophy className="w-4 h-4 text-slate-400" />
+        <h2 className="font-display font-semibold text-lg text-white">Membership Rank</h2>
+        <Link to="/leaderboard" className="inline-flex items-center gap-1 text-xs text-lime-300 hover:text-lime-200"><Trophy className="w-4 h-4" /> View leaderboard</Link>
       </div>
 
       <div className="flex items-center gap-4">

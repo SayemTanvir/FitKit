@@ -7,6 +7,7 @@ export interface SocialActivity {
   id: string;
   userId?: number;
   name: string;
+  photoUrl?: string | null;
   initials: string;
   avatarGradient: string; // tailwind gradient stops, e.g. "from-lime-400 to-emerald-500"
   message: string;

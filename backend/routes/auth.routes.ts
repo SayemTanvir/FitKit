@@ -6,8 +6,19 @@ import {
   updateUserProfileService,
 } from '../services/auth.service';
 import { AuthRequest, verifyToken } from '../middleware/auth.middleware';
+import { query } from '../db';
 
 const router = Router();
+
+function isValidBirthDate(value: unknown) {
+  const text = String(value || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
+  const date = new Date(`${text}T00:00:00Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== text) return false;
+  const today = new Date();
+  const latest = new Date(Date.UTC(today.getFullYear() - 16, today.getMonth(), today.getDate()));
+  return date <= latest;
+}
 
 // POST /api/auth/register
 router.post('/register', async (req: Request, res: Response) => {
@@ -27,12 +38,12 @@ router.post('/register', async (req: Request, res: Response) => {
 
     const validLevel = ['Beginner', 'Intermediate', 'Advanced'].includes(fitness_level);
     const validGender = gender === 'Male' || gender === 'Female';
-    const validDate = /^\d{4}-\d{2}-\d{2}$/.test(String(birth_date || ''));
+    const validDate = isValidBirthDate(birth_date);
     if (!String(name || '').trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '')) || String(password || '').length < 8) {
       return res.status(400).json({ error: 'Provide a name, valid email, and password of at least 8 characters.' });
     }
     if (!validDate || !validGender || !validLevel || !(Number(height_cm) > 0) || !(Number(weight_kg) > 0)) {
-      return res.status(400).json({ error: 'Provide a valid birth date, gender, fitness level, height, and weight.' });
+      return res.status(400).json({ error: 'Provide a valid birth date (age 16+), gender, fitness level, height, and weight.' });
     }
 
     const newMember = await registerMemberService({
@@ -93,12 +104,37 @@ router.get('/me', verifyToken, async (req: AuthRequest, res: Response) => {
   }
 });
 
+async function savePhoto(req:AuthRequest,res:Response,remove=false){
+  const photo=remove?null:req.body?.photo_url?String(req.body.photo_url):null;
+  const match=/^\/api\/community\/media\/(\d+)$/.exec(photo||'');
+  if(photo&&(!match&&!/^https:\/\//i.test(photo)||photo.length>1000))return res.status(400).json({error:'Choose an uploaded image or HTTPS URL.'});
+  if(match){
+    const owned=await query("SELECT 1 FROM MediaAsset WHERE media_id=$1 AND owner_id=$2 AND purpose='Avatar'",[Number(match[1]),req.user!.userId]);
+    if(!owned.rowCount)return res.status(403).json({error:'Profile image does not belong to you.'});
+  }
+  const previous=await query('SELECT profile_photo_url FROM users WHERE user_id=$1',[req.user!.userId]);
+  await query('UPDATE users SET profile_photo_url=$1 WHERE user_id=$2',[photo,req.user!.userId]);
+  await query('UPDATE MemberProfile SET photo_url=$1,updated_at=CURRENT_TIMESTAMP WHERE user_id=$2',[photo,req.user!.userId]);
+  const old=/^\/api\/community\/media\/(\d+)$/.exec(previous.rows[0]?.profile_photo_url||'');
+  if(old&&previous.rows[0].profile_photo_url!==photo)await query("DELETE FROM MediaAsset WHERE media_id=$1 AND owner_id=$2 AND purpose='Avatar'",[Number(old[1]),req.user!.userId]);
+  return res.json({photo_url:photo});
+}
+router.put('/me/photo',verifyToken,(req:AuthRequest,res:Response)=>savePhoto(req,res));
+router.delete('/me/photo',verifyToken,(req:AuthRequest,res:Response)=>savePhoto(req,res,true));
+
 router.get('/profile/:id', verifyToken, async (req: AuthRequest, res: Response) => {
   const userId = Number(req.params.id);
   if (!Number.isInteger(userId)) {
     return res.status(400).json({ error: 'Invalid user ID.' });
   }
   try {
+    if (userId !== req.user!.userId) {
+      const access = await query(`SELECT 1 FROM MemberProfile mp WHERE mp.user_id=$2
+        AND NOT EXISTS (SELECT 1 FROM UserBlock b WHERE (b.blocker_id=$1 AND b.blocked_id=$2) OR (b.blocker_id=$2 AND b.blocked_id=$1))
+        AND (mp.is_private=FALSE OR EXISTS (SELECT 1 FROM FollowRelationship f WHERE f.follower_id=$1 AND f.followed_id=$2 AND f.status='Accepted')
+        OR EXISTS (SELECT 1 FROM FriendRequest f WHERE ((f.requester_id=$1 AND f.recipient_id=$2) OR (f.recipient_id=$1 AND f.requester_id=$2)) AND f.status='Accepted'))`,[req.user!.userId,userId]);
+      if (!access.rowCount) return res.status(404).json({ error: 'Profile not found or private.' });
+    }
     const profile = await getUserProfileService(userId);
     if (!profile) {
       return res.status(404).json({ error: 'User profile not found.' });
@@ -108,6 +144,7 @@ router.get('/profile/:id', verifyToken, async (req: AuthRequest, res: Response) 
       user: {
         id: user.id,
         name: user.name,
+        photo_url: user.photo_url,
         role: user.role,
         fitness_level: user.fitness_level,
         primary_goal: user.primary_goal,
@@ -145,8 +182,8 @@ router.put('/me', verifyToken, async (req: AuthRequest, res: Response) => {
       (value) => Number.isInteger(Number(value)) && Number(value) > 0
     );
 
-  if (!String(name || '').trim() || !/^\d{4}-\d{2}-\d{2}$/.test(String(birth_date || '')) || !validGender || !validLevel || !positiveNumbers || !validMemberGoals) {
-    return res.status(400).json({ error: 'Invalid profile or goal values.' });
+  if (!String(name || '').trim() || !isValidBirthDate(birth_date) || !validGender || !validLevel || !positiveNumbers || !validMemberGoals) {
+    return res.status(400).json({ error: 'Invalid profile, birth date (age 16+), or goal values.' });
   }
 
   try {

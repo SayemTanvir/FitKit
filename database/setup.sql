@@ -6,5 +6,6 @@
 \ir triggers.sql
 \ir views.sql
 \ir insert.sql
+\ir platform.sql
 
 SELECT 'FitKit database setup complete.' AS status;

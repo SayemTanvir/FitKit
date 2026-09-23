@@ -48,6 +48,7 @@ export default function Social() {
               timeAgo: getRelativeTime(item.timestamp),
               initials: getInitials(name),
               avatarGradient: gradients[index % gradients.length],
+              photoUrl: item.photo_url,
               reactions: [
                 { emoji: '🔥', count: Number(item.fire_count || 0) },
                 { emoji: '💪', count: Number(item.flex_count || 0) },

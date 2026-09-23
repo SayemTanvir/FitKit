@@ -64,9 +64,12 @@ router.get('/', verifyToken, async (req: AuthRequest, res: Response) => {
          ON mwp.plan_id = wp.plan_id AND mwp.user_id = $1
        LEFT JOIN WorkoutPlanExercise wpe ON wpe.plan_id = wp.plan_id
        LEFT JOIN Exercise e ON e.exercise_id = wpe.exercise_id
+       WHERE $2 = 'Admin' OR EXISTS (
+         SELECT 1 FROM WorkoutPlanExercise ready WHERE ready.plan_id = wp.plan_id
+       )
        GROUP BY wp.plan_id, u.name, mwp.status, mwp.start_date
        ORDER BY is_active DESC, wp.plan_id DESC`,
-      [req.user!.userId]
+      [req.user!.userId, req.user!.role]
     );
     return res.status(200).json(result.rows);
   } catch (err) {
@@ -84,15 +87,16 @@ router.post(
     if ('error' in plan) {
       return res.status(400).json({ error: plan.error });
     }
+    const hasFirstExercise = req.body?.exercise_id !== undefined || req.body?.target_quantity !== undefined;
     const exerciseId = Number(req.body?.exercise_id);
     const targetQuantity = Number(req.body?.target_quantity);
-    if (!Number.isInteger(exerciseId) || exerciseId < 1 || !Number.isInteger(targetQuantity) || targetQuantity < 1) {
+    if (hasFirstExercise && (!Number.isInteger(exerciseId) || exerciseId < 1 || !Number.isInteger(targetQuantity) || targetQuantity < 1)) {
       return res.status(400).json({ error: 'Select an exercise and a positive target quantity.' });
     }
 
     try {
       const result = await query(
-        `WITH created_plan AS (
+        hasFirstExercise ? `WITH created_plan AS (
            INSERT INTO WorkoutPlan
              (admin_id, title, target_level, goal_category, duration_weeks)
            VALUES ($1, $2, $3, $4, $5)
@@ -104,8 +108,13 @@ router.post(
            RETURNING plan_id
          )
          SELECT created_plan.* FROM created_plan
-         JOIN created_exercise ON created_exercise.plan_id = created_plan.plan_id`,
-        [req.user!.userId, plan.title, plan.targetLevel, plan.goalCategory, plan.durationWeeks, exerciseId, targetQuantity]
+         JOIN created_exercise ON created_exercise.plan_id = created_plan.plan_id`
+          : `INSERT INTO WorkoutPlan (admin_id, title, target_level, goal_category, duration_weeks)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING *`,
+        hasFirstExercise
+          ? [req.user!.userId, plan.title, plan.targetLevel, plan.goalCategory, plan.durationWeeks, exerciseId, targetQuantity]
+          : [req.user!.userId, plan.title, plan.targetLevel, plan.goalCategory, plan.durationWeeks]
       );
       return res.status(201).json(result.rows[0]);
     } catch (err: any) {
@@ -114,6 +123,79 @@ router.post(
       }
       console.error('Create plan error:', err);
       return res.status(500).json({ error: 'Failed to create workout plan.' });
+    }
+  }
+);
+
+router.post(
+  '/:id/exercises',
+  verifyToken,
+  requireRole('Admin'),
+  async (req: AuthRequest, res: Response) => {
+    const planId = Number(req.params.id);
+    const exerciseId = Number(req.body?.exercise_id);
+    const dayNumber = Number(req.body?.day_number);
+    const targetQuantity = Number(req.body?.target_quantity);
+    if (![planId, exerciseId, dayNumber, targetQuantity].every((value) => Number.isInteger(value) && value > 0)) {
+      return res.status(400).json({ error: 'Choose an exercise, day, and positive target quantity.' });
+    }
+    try {
+      const result = await query(
+        `INSERT INTO WorkoutPlanExercise (plan_id, exercise_id, day_number, order_seq, target_quantity)
+         SELECT wp.plan_id, $3, $4,
+                COALESCE((SELECT MAX(order_seq) + 1 FROM WorkoutPlanExercise WHERE plan_id = wp.plan_id AND day_number = $4), 1),
+                $5
+         FROM WorkoutPlan wp
+         JOIN Exercise e ON e.exercise_id = $3
+         LEFT JOIN StrengthExercise se ON se.exercise_id = e.exercise_id
+         LEFT JOIN CardioExercise ce ON ce.exercise_id = e.exercise_id
+         LEFT JOIN FlexibilityExercise fe ON fe.exercise_id = e.exercise_id
+         WHERE wp.plan_id = $1 AND wp.admin_id = $2 AND $4 <= wp.duration_weeks * 7
+           AND (
+             wp.goal_category = 'General Fitness'
+             OR (wp.goal_category = 'Weight Loss' AND ce.exercise_id IS NOT NULL)
+             OR (wp.goal_category = 'Flexibility' AND fe.exercise_id IS NOT NULL)
+             OR (wp.goal_category IN ('Strength', 'Muscle Gain') AND se.exercise_id IS NOT NULL)
+           )
+         RETURNING *`,
+        [planId, req.user!.userId, exerciseId, dayNumber, targetQuantity]
+      );
+      if (!result.rowCount) return res.status(400).json({ error: 'Plan, day, or exercise category is not valid for this schedule.' });
+      return res.status(201).json(result.rows[0]);
+    } catch (err: any) {
+      if (err.code === '23503') return res.status(400).json({ error: 'Selected exercise does not exist.' });
+      if (err.code === '23505') return res.status(409).json({ error: 'This exercise is already scheduled for that day.' });
+      console.error('Add plan exercise error:', err);
+      return res.status(500).json({ error: 'Failed to add exercise to plan.' });
+    }
+  }
+);
+
+router.delete(
+  '/:id/exercises/:exerciseId/:day',
+  verifyToken,
+  requireRole('Admin'),
+  async (req: AuthRequest, res: Response) => {
+    const planId = Number(req.params.id);
+    const exerciseId = Number(req.params.exerciseId);
+    const day = Number(req.params.day);
+    if (![planId, exerciseId, day].every((value) => Number.isInteger(value) && value > 0)) {
+      return res.status(400).json({ error: 'Invalid plan exercise.' });
+    }
+    try {
+      const result = await query(
+        `DELETE FROM WorkoutPlanExercise wpe
+         USING WorkoutPlan wp
+         WHERE wpe.plan_id = wp.plan_id AND wp.plan_id = $1 AND wp.admin_id = $2
+           AND wpe.exercise_id = $3 AND wpe.day_number = $4
+         RETURNING wpe.exercise_id`,
+        [planId, req.user!.userId, exerciseId, day]
+      );
+      if (!result.rowCount) return res.status(404).json({ error: 'Plan exercise not found.' });
+      return res.status(200).json({ message: 'Exercise removed from plan.' });
+    } catch (err) {
+      console.error('Remove plan exercise error:', err);
+      return res.status(500).json({ error: 'Failed to remove exercise from plan.' });
     }
   }
 );
@@ -130,13 +212,11 @@ router.post(
 
     try {
       const result = await query(
-        `WITH stopped AS (
-           UPDATE MemberWorkoutPlan
-           SET status = 'Abandoned'
-           WHERE user_id = $1 AND status = 'Active' AND plan_id <> $2
-         )
-         INSERT INTO MemberWorkoutPlan (user_id, plan_id, start_date, status)
-         VALUES ($1, $2, CURRENT_DATE, 'Active')
+        `INSERT INTO MemberWorkoutPlan (user_id, plan_id, start_date, status)
+         SELECT $1, wp.plan_id, CURRENT_DATE, 'Active'
+         FROM WorkoutPlan wp
+         WHERE wp.plan_id = $2
+           AND EXISTS (SELECT 1 FROM WorkoutPlanExercise wpe WHERE wpe.plan_id = wp.plan_id)
          ON CONFLICT (user_id, plan_id)
          DO UPDATE SET
            start_date = CASE
@@ -147,6 +227,7 @@ router.post(
          RETURNING *`,
         [req.user!.userId, planId]
       );
+      if (!result.rowCount) return res.status(404).json({ error: 'Plan not found or has no exercises yet.' });
       return res.status(200).json(result.rows[0]);
     } catch (err: any) {
       if (err.code === '23503') {

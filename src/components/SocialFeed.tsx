@@ -1,97 +1,29 @@
 import { useState } from 'react';
 import { Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import type { SocialActivity } from '../types';
 import { reactToFeed } from '../services/api';
-import toast from 'react-hot-toast';
+import UserAvatar from './UserAvatar';
+import ReactionBar from './ReactionBar';
+import { reactions, type ReactionType } from '../services/reactions';
 
-interface SocialFeedProps {
-  activities: SocialActivity[];
-}
-
-export default function SocialFeed({ activities }: SocialFeedProps) {
-  return (
-    <div className="glass rounded-2xl p-6 flex flex-col">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-display font-semibold text-lg text-white">Social Feed</h2>
-        <Users className="w-4 h-4 text-slate-400" />
-      </div>
-      <div className="space-y-4 overflow-y-auto max-h-[420px] pr-1">
-        {activities.map((activity) => (
-          <ActivityItem key={activity.id} activity={activity} />
-        ))}
-      </div>
-    </div>
-  );
+export default function SocialFeed({ activities }: { activities: SocialActivity[] }) {
+  return <div className="glass rounded-2xl p-6 flex flex-col"><div className="flex items-center justify-between mb-4"><h2 className="font-display font-semibold text-lg text-white">Social Feed</h2><Users className="w-4 h-4 text-slate-400" /></div><div className="space-y-4 overflow-y-auto max-h-[420px] pr-1">{activities.map((activity)=><ActivityItem key={activity.id} activity={activity}/>)}</div></div>;
 }
 
 function ActivityItem({ activity }: { activity: SocialActivity }) {
-  const [reactions, setReactions] = useState(activity.reactions);
-  const [activeEmoji, setActiveEmoji] = useState<string | null>(activity.activeReaction || null);
-  const [saving, setSaving] = useState(false);
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-
-  const toggleReaction = async (emoji: string) => {
-    if (user.role !== 'Member' || saving) return;
-    const reactionTypes = { '🔥': 'Fire', '💪': 'Flex', '👏': 'Clap' } as const;
-    const reactionType = reactionTypes[emoji as keyof typeof reactionTypes];
-    if (!reactionType) return;
-
+  const initial=Object.fromEntries(reactions.map(([type,emoji])=>[type,activity.reactions.find((item)=>item.emoji===emoji)?.count||0])) as Record<ReactionType,number>;
+  const [counts,setCounts]=useState(initial);
+  const [active,setActive]=useState<ReactionType|null>(reactions.find(([,emoji])=>emoji===activity.activeReaction)?.[0]||null);
+  const [saving,setSaving]=useState(false);
+  let member=false;try{member=JSON.parse(localStorage.getItem('user')||'{}').role==='Member';}catch{ /* signed-out fallback */ }
+  const toggle=async(type:ReactionType)=>{
+    if(!member||saving)return;
     setSaving(true);
-    try {
-      const result = await reactToFeed(Number(activity.id), reactionType);
-      const counts: Record<string, number> = {
-        '🔥': Number(result.fire_count || 0),
-        '💪': Number(result.flex_count || 0),
-        '👏': Number(result.clap_count || 0),
-      };
-      const activeMap: Record<string, string> = { Fire: '🔥', Flex: '💪', Clap: '👏' };
-      setReactions((previous) => previous.map((reaction) => ({ ...reaction, count: counts[reaction.emoji] || 0 })));
-      setActiveEmoji(result.my_reaction ? activeMap[result.my_reaction] : null);
-    } catch (error: any) {
-      toast.error(error.message || 'Could not save reaction');
-    } finally {
-      setSaving(false);
-    }
+    try{const result=await reactToFeed(Number(activity.id),type);setCounts({Fire:Number(result.fire_count||0),Flex:Number(result.flex_count||0),Clap:Number(result.clap_count||0)});setActive(result.my_reaction||null);}
+    catch(error:any){toast.error(error.message||'Could not save reaction');}
+    finally{setSaving(false);}
   };
-
-  return (
-    <article className="pb-4 border-b border-white/10 last:border-0 last:pb-0">
-      <div className="flex items-center gap-2.5">
-        <div
-          className={`w-8 h-8 rounded-full bg-gradient-to-br ${activity.avatarGradient} flex items-center justify-center text-[11px] font-bold text-slate-900 shrink-0`}
-        >
-          {activity.initials}
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm text-slate-200">
-            <Link
-              to={activity.userId ? `/profile/${activity.userId}` : '/profile'}
-              className="font-semibold text-white hover:text-lime-400 transition-colors cursor-pointer"
-            >
-              {activity.name}
-            </Link>{' '}
-            {activity.message}
-          </p>
-          <p className="text-[11px] text-slate-500">{activity.timeAgo}</p>
-        </div>
-      </div>
-      <div className="flex gap-2 mt-2.5 ml-[42px]">
-        {reactions.map((r) => (
-          <button
-            key={r.emoji}
-            onClick={() => toggleReaction(r.emoji)}
-            disabled={user.role !== 'Member' || saving}
-            className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border transition-colors ${
-              activeEmoji === r.emoji
-                ? 'bg-lime-400/20 border-lime-400/50 text-lime-100'
-                : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 disabled:opacity-50'
-            }`}
-          >
-            {r.emoji} <span className="font-mono-fk">{r.count}</span>
-          </button>
-        ))}
-      </div>
-    </article>
-  );
+  return <article className="pb-4 border-b border-white/10 last:border-0 last:pb-0"><div className="flex items-center gap-2.5"><UserAvatar name={activity.name} photoUrl={activity.photoUrl} gradient={activity.avatarGradient} /><div className="min-w-0"><p className="text-sm text-slate-200"><Link to={activity.userId?`/profile/${activity.userId}`:'/profile'} className="font-semibold text-white hover:text-lime-400 transition-colors">{activity.name}</Link>{' '}{activity.message}</p><p className="text-[11px] text-slate-500">{activity.timeAgo}</p></div></div><div className="mt-2.5 ml-[42px]"><ReactionBar counts={counts} active={active} onReact={toggle} disabled={!member||saving}/></div></article>;
 }

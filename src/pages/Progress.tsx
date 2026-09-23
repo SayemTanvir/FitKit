@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   deleteHydrationEntry,
   deleteStepEntry,
@@ -17,12 +17,14 @@ export default function Progress() {
   const [exercises, setExercises] = useState<any[]>([]);
   const [selectedEx, setSelectedEx] = useState<number>(1);
   const [quantity, setQuantity] = useState<number>(30);
-  const [isPublic, setIsPublic] = useState<boolean>(true);
+  const [isPublic, setIsPublic] = useState<boolean>(false);
   const [logs, setLogs] = useState<any[]>([]);
   const [stepHistory, setStepHistory] = useState<any[]>([]);
   const [hydrationHistory, setHydrationHistory] = useState<any[]>([]);
   const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [savingWorkout, setSavingWorkout] = useState(false);
+  const savingWorkoutRef = useRef(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -53,6 +55,9 @@ export default function Progress() {
 
   const handleLog = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingWorkoutRef.current) return;
+    savingWorkoutRef.current = true;
+    setSavingWorkout(true);
     try {
       await logWorkout({
         exercise_id: selectedEx,
@@ -63,6 +68,9 @@ export default function Progress() {
       loadData();
     } catch (err: any) {
       toast.error(err.message || 'Failed to record workout');
+    } finally {
+      savingWorkoutRef.current = false;
+      setSavingWorkout(false);
     }
   };
 
@@ -164,9 +172,10 @@ export default function Progress() {
 
           <button
             type="submit"
-            className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition-colors flex items-center gap-1.5 cursor-pointer"
+            disabled={savingWorkout || exercises.length === 0}
+            className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <CheckCircle className="w-4 h-4" /> Save Workout
+            <CheckCircle className="w-4 h-4" /> {savingWorkout ? 'Saving...' : 'Save Workout'}
           </button>
         </form>
       </div>

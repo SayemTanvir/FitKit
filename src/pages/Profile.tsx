@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import Leaderboard from '../components/Leaderboard';
 import { fetchMyProfile } from '../services/api';
 import type { Achievement } from '../types';
+import UserAvatar from '../components/UserAvatar';
 
 export default function Profile() {
   const { userId } = useParams();
@@ -48,7 +49,7 @@ export default function Profile() {
   return (
     <div className="max-w-3xl space-y-6">
       <div className="glass rounded-2xl p-8">
-        <h1 className="font-display font-semibold text-2xl text-white mb-2">{profile.name}</h1>
+        <div className="flex items-center gap-3 mb-2"><UserAvatar name={profile.name} photoUrl={profile.photo_url} className="w-14 h-14"/><h1 className="font-display font-semibold text-2xl text-white">{profile.name}</h1></div>
         <p className="text-slate-400 text-sm">{profile.role}{profile.email ? ` · ${profile.email}` : ''}</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 text-sm">
           <div className="rounded-xl bg-white/5 p-3"><p className="text-slate-500 text-xs">Fitness level</p><p className="text-white mt-1">{profile.fitness_level || 'Not set'}</p></div>
