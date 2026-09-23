@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Dumbbell, UserPlus, LogIn } from 'lucide-react';
 import { loginUser, registerUser } from '../services/api';
 
 export default function Login() {
-  const navigate = useNavigate();
   const [isRegistering, setIsRegistering] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -17,6 +15,7 @@ export default function Login() {
   const [weightKg, setWeightKg] = useState('70');
   const [heightCm, setHeightCm] = useState('175');
   const [fitnessLevel, setFitnessLevel] = useState('Beginner');
+  const [birthDate, setBirthDate] = useState('2000-01-01');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,6 +29,7 @@ export default function Login() {
           email,
           password,
           gender,
+          birth_date: birthDate,
           weight_kg: Number(weightKg),
           height_cm: Number(heightCm),
           fitness_level: fitnessLevel,
@@ -37,23 +37,13 @@ export default function Login() {
 
         // Store session and navigate directly to dashboard
         localStorage.setItem('token', data.token);
-        localStorage.setItem(
-          'user',
-          JSON.stringify({
-            id: data.user.user_id,
-            name: data.user.name,
-            email: data.user.email,
-            role: 'Member',
-            status: 'Active Member',
-            active_plan: 'Full Body Hypertrophy',
-          })
-        );
-        window.location.href = '/dashboard';
+        localStorage.setItem('user', JSON.stringify(data.user));
+        window.location.href = '/';
       } else {
         const data = await loginUser({ email, password });
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
-        window.location.href = '/dashboard';
+        window.location.href = '/';
       }
     } catch (err: any) {
       setError(err.message || 'Operation failed');
@@ -139,6 +129,7 @@ export default function Login() {
             <input
               type="password"
               required
+                minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -148,6 +139,16 @@ export default function Login() {
 
           {isRegistering && (
             <>
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Birth Date</label>
+                <input
+                  type="date"
+                  required
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1">Gender</label>
@@ -179,6 +180,8 @@ export default function Login() {
                   <label className="block text-xs font-medium text-slate-300 mb-1">Weight (kg)</label>
                   <input
                     type="number"
+                    min={1}
+                    required
                     value={weightKg}
                     onChange={(e) => setWeightKg(e.target.value)}
                     className="w-full px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none"
@@ -188,6 +191,8 @@ export default function Login() {
                   <label className="block text-xs font-medium text-slate-300 mb-1">Height (cm)</label>
                   <input
                     type="number"
+                    min={1}
+                    required
                     value={heightCm}
                     onChange={(e) => setHeightCm(e.target.value)}
                     className="w-full px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none"

@@ -1,6 +1,15 @@
-import React, { useEffect, useState } from 'react';
-import { fetchExercises, fetchMyWorkoutLogs, logWorkout, deleteWorkoutLog } from '../services/api';
-import { Flame, Trash2, CheckCircle } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  deleteHydrationEntry,
+  deleteStepEntry,
+  deleteWorkoutLog,
+  fetchExercises,
+  fetchHydrationHistory,
+  fetchMyWorkoutLogs,
+  fetchStepHistory,
+  logWorkout,
+} from '../services/api';
+import { Flame, Trash2, CheckCircle, Droplet, Footprints } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Progress() {
@@ -10,27 +19,37 @@ export default function Progress() {
   const [quantity, setQuantity] = useState<number>(30);
   const [isPublic, setIsPublic] = useState<boolean>(true);
   const [logs, setLogs] = useState<any[]>([]);
+  const [stepHistory, setStepHistory] = useState<any[]>([]);
+  const [hydrationHistory, setHydrationHistory] = useState<any[]>([]);
+  const [loadError, setLoadError] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
-      const exList = await fetchExercises();
+      const [exList, logList, steps, hydration] = await Promise.all([
+        fetchExercises(),
+        user?.role === 'Member' ? fetchMyWorkoutLogs() : Promise.resolve([]),
+        user?.role === 'Member' ? fetchStepHistory() : Promise.resolve([]),
+        user?.role === 'Member' ? fetchHydrationHistory() : Promise.resolve([]),
+      ]);
       if (Array.isArray(exList)) {
         setExercises(exList);
         if (exList.length > 0) setSelectedEx(exList[0].exercise_id);
       }
-
-      if (user?.role === 'Member') {
-        const logList = await fetchMyWorkoutLogs();
-        if (Array.isArray(logList)) setLogs(logList);
-      }
-    } catch (err) {
-      console.error('Failed to load progress data:', err);
+      setLogs(logList);
+      setStepHistory(steps);
+      setHydrationHistory(hydration);
+      setLoadError('');
+    } catch (err: any) {
+      setLoadError(err.message || 'Failed to load activity data');
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [user?.role]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const handleLog = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,12 +67,35 @@ export default function Progress() {
   };
 
   const handleDelete = async (entryId: number) => {
+    if (!window.confirm('Delete this workout log?')) return;
     try {
       await deleteWorkoutLog(entryId);
       toast.success('Workout log removed');
       loadData();
     } catch (err: any) {
       toast.error(`Delete rejected: ${err.message}`);
+    }
+  };
+
+  const handleDeleteStep = async (entryId: number) => {
+    if (!window.confirm('Delete this step entry?')) return;
+    try {
+      await deleteStepEntry(entryId);
+      toast.success('Step entry removed');
+      loadData();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+  const handleDeleteHydration = async (entryId: number) => {
+    if (!window.confirm('Delete this hydration entry?')) return;
+    try {
+      await deleteHydrationEntry(entryId);
+      toast.success('Hydration entry removed');
+      loadData();
+    } catch (err: any) {
+      toast.error(err.message);
     }
   };
 
@@ -70,6 +112,7 @@ export default function Progress() {
 
   return (
     <div className="space-y-6">
+      {loadError && <div role="alert" className="rounded-xl border border-red-400/25 bg-red-400/10 px-4 py-3 text-sm text-red-200">{loadError}</div>}
       <div className="glass rounded-2xl p-6 sm:p-8">
         <h1 className="font-display font-semibold text-2xl text-white mb-1">Daily Activity Logs</h1>
         <p className="text-slate-400 text-sm">Log your exercises and track automatic calorie burn computations.</p>
@@ -144,7 +187,9 @@ export default function Progress() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {logs.length === 0 ? (
+              {loading ? (
+                <tr><td colSpan={6} className="py-8 text-center text-slate-500">Loading activity...</td></tr>
+              ) : logs.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-8 text-center text-slate-500">
                     No workouts logged yet.
@@ -178,6 +223,34 @@ export default function Progress() {
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="glass rounded-2xl p-6">
+          <h2 className="font-display font-semibold text-lg text-white mb-4 flex items-center gap-2"><Footprints className="w-5 h-5 text-lime-300" /> Step History</h2>
+          {stepHistory.length === 0 ? <p className="text-sm text-slate-500">No steps logged yet.</p> : (
+            <div className="space-y-2 max-h-72 overflow-y-auto">
+              {stepHistory.map((entry) => (
+                <div key={entry.step_entry_id} className="flex items-center gap-3 rounded-xl bg-white/[0.03] border border-white/10 p-3">
+                  <div className="flex-1"><p className="text-white text-sm font-semibold">+{Number(entry.steps_added).toLocaleString()} steps</p><p className="text-xs text-slate-500">{new Date(entry.logged_at).toLocaleString()} · {entry.calories_burned} kcal</p></div>
+                  <button type="button" onClick={() => handleDeleteStep(entry.step_entry_id)} aria-label="Delete step entry" className="p-2 text-slate-400 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="glass rounded-2xl p-6">
+          <h2 className="font-display font-semibold text-lg text-white mb-4 flex items-center gap-2"><Droplet className="w-5 h-5 text-cyan-300" /> Hydration History</h2>
+          {hydrationHistory.length === 0 ? <p className="text-sm text-slate-500">No water logged yet.</p> : (
+            <div className="space-y-2 max-h-72 overflow-y-auto">
+              {hydrationHistory.map((entry) => (
+                <div key={entry.hydration_id} className="flex items-center gap-3 rounded-xl bg-white/[0.03] border border-white/10 p-3">
+                  <div className="flex-1"><p className="text-white text-sm font-semibold">+{Number(entry.amount_ml).toLocaleString()} ml</p><p className="text-xs text-slate-500">{new Date(entry.logged_at).toLocaleString()}</p></div>
+                  <button type="button" onClick={() => handleDeleteHydration(entry.hydration_id)} aria-label="Delete hydration entry" className="p-2 text-slate-400 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

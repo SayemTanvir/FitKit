@@ -1,8 +1,9 @@
 import { Trophy, Shield, Footprints, Flame, Dumbbell, Lock } from 'lucide-react';
 import ProgressBar from './ProgressBar';
 import type { Achievement, AchievementIcon } from '../types';
+import type { ReactNode } from 'react';
 
-const iconMap: Record<AchievementIcon, JSX.Element> = {
+const iconMap: Record<AchievementIcon, ReactNode> = {
   footprints: <Footprints className="w-4 h-4 text-lime-300" />,
   flame: <Flame className="w-4 h-4 text-orange-300" />,
   dumbbell: <Dumbbell className="w-4 h-4 text-cyan-300" />,
@@ -46,7 +47,7 @@ export default function Leaderboard({
           </div>
           <ProgressBar value={xpCurrent} max={xpTarget} />
           <p className="text-[11px] text-slate-500 mt-1.5">
-            {tenure} tenure · {xpCurrent.toLocaleString()} / {xpTarget.toLocaleString()} XP to {nextRank}
+            {tenure} tenure · {xpCurrent.toLocaleString()} / {xpTarget.toLocaleString()} months to {nextRank}
           </p>
         </div>
       </div>

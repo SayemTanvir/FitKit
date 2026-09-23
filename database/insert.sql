@@ -29,7 +29,7 @@ INSERT INTO MembershipRank (rank_name, min_years) VALUES
 ON CONFLICT (rank_name) DO NOTHING;
 
 -- 3. Pre-Seeded Users with Salted Bcrypt Hashes (Password: "Password@123")
--- Hash: $2b$10$z7g0/wzOQY.vQj6L4hN4O.Gf2Bw6X4I90d1qZgKj5J/lQyN9eX5e.
+-- Hash generated for the demo password below.
 INSERT INTO users (
     user_id, name, email, password_hash, phone_no, gender, 
     birth_date, height_cm, weight_kg, fitness_level, primary_goal, 
@@ -37,13 +37,13 @@ INSERT INTO users (
 ) VALUES 
 (
     1, 'FitKit Admin', 'admin@fitkit.com', 
-    '$2b$10$z7g0/wzOQY.vQj6L4hN4O.Gf2Bw6X4I90d1qZgKj5J/lQyN9eX5e.', 
+    '$2b$10$v1dx1SG5zUWaAKremjb5YOyraH4ZUPqR7pJ45jkkaxjxrsLtxFwK.',
     '01700000000', 'Male', '1995-05-15', 178.0, 75.0, 
     'Advanced', 'General Fitness', 'Public', 1, 'Work', '2023-01-01 00:00:00'
 ),
 (
     2, 'Regular Member', 'member@fitkit.com', 
-    '$2b$10$z7g0/wzOQY.vQj6L4hN4O.Gf2Bw6X4I90d1qZgKj5J/lQyN9eX5e.', 
+    '$2b$10$v1dx1SG5zUWaAKremjb5YOyraH4ZUPqR7pJ45jkkaxjxrsLtxFwK.',
     '01800000000', 'Female', '2001-08-20', 162.0, 58.0, 
     'Beginner', 'Weight Loss', 'Friends', 1, 'Home', '2025-06-01 00:00:00'
 )
@@ -88,7 +88,30 @@ ON CONFLICT (exercise_id) DO NOTHING;
 
 SELECT setval('Exercise_exercise_id_seq', (SELECT MAX(exercise_id) FROM Exercise));
 
--- 5. Achievements
+-- 5. Curated Workout Plans
+INSERT INTO WorkoutPlan (plan_id, admin_id, title, target_level, goal_category, duration_weeks) VALUES
+    (1, 1, 'Full Body Foundation', 'Beginner', 'General Fitness', 4),
+    (2, 1, 'Strength Builder', 'Intermediate', 'Strength', 6),
+    (3, 1, 'Cardio Endurance', 'Intermediate', 'Weight Loss', 6)
+ON CONFLICT (plan_id) DO NOTHING;
+
+INSERT INTO WorkoutPlanExercise
+    (plan_id, exercise_id, day_number, order_seq, target_quantity) VALUES
+    (1, 1, 1, 1, 12),
+    (1, 3, 1, 2, 15),
+    (1, 5, 1, 3, 30),
+    (2, 2, 1, 1, 8),
+    (2, 1, 1, 2, 15),
+    (3, 4, 1, 1, 30)
+ON CONFLICT (plan_id, exercise_id, day_number) DO NOTHING;
+
+INSERT INTO MemberWorkoutPlan (user_id, plan_id, start_date, status) VALUES
+    (2, 1, CURRENT_DATE, 'Active')
+ON CONFLICT (user_id, plan_id) DO NOTHING;
+
+SELECT setval('WorkoutPlan_plan_id_seq', (SELECT MAX(plan_id) FROM WorkoutPlan));
+
+-- 6. Achievements
 INSERT INTO Achievement (achievement_id, badge_name, criteria_description) VALUES
     (1, 'First Step', 'Log your first workout or step increment.'),
     (2, '10k Club', 'Reach 10,000 steps in a single day.'),
@@ -96,3 +119,7 @@ INSERT INTO Achievement (achievement_id, badge_name, criteria_description) VALUE
 ON CONFLICT (achievement_id) DO NOTHING;
 
 SELECT setval('Achievement_achievement_id_seq', (SELECT MAX(achievement_id) FROM Achievement));
+
+INSERT INTO MemberAchievement (user_id, achievement_id, earned_date) VALUES
+    (2, 1, CURRENT_TIMESTAMP)
+ON CONFLICT (user_id, achievement_id) DO NOTHING;

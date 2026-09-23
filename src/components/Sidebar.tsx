@@ -1,6 +1,5 @@
-import { useState } from 'react';
 import { NavLink, Link } from 'react-router-dom';
-import { LayoutDashboard, Dumbbell, Activity, Users, Trophy, Settings, X, Shield, Moon } from 'lucide-react';
+import { LayoutDashboard, Dumbbell, Activity, Users, Trophy, Settings, X, Shield } from 'lucide-react';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -17,7 +16,6 @@ const navItems = [
 ];
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
-  const [restOn, setRestOn] = useState(false);
 
   // Parse active user details from local storage
   const user = (() => {
@@ -29,7 +27,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   })();
 
   const userName = user.name || 'FitKit Member';
-  const userRole = user.role || user.status || 'Silver Member';
+  const userRole = user.role || 'Member';
 
   // Generate 2-letter initials dynamically from full name
   const initials = userName
@@ -114,25 +112,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </div>
         </Link>
 
-        <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/10">
-          <div className="flex items-center gap-1.5 text-xs text-slate-300">
-            <Moon className="w-3.5 h-3.5" />
-            <span>Rest Mode: {restOn ? 'On' : 'Off'}</span>
-          </div>
-          <button
-            onClick={() => setRestOn((v) => !v)}
-            aria-pressed={restOn}
-            aria-label="Toggle rest mode"
-            className="w-10 h-[22px] rounded-full relative shrink-0 transition-colors cursor-pointer"
-            style={{ background: restOn ? 'linear-gradient(90deg, #a3e635, #22d3ee)' : 'rgba(255,255,255,0.1)' }}
-          >
-            <span
-              className={`absolute top-[3px] left-[3px] w-4 h-4 rounded-full transition-transform duration-300 ${
-                restOn ? 'bg-slate-900 translate-x-[18px]' : 'bg-slate-300 translate-x-0'
-              }`}
-            />
-          </button>
-        </div>
+        <Link to="/settings" onClick={onClose} className="flex items-center gap-2 mt-4 pt-3 border-t border-white/10 text-xs text-slate-300 hover:text-lime-300">
+          <Settings className="w-3.5 h-3.5" /> Edit profile and goals
+        </Link>
       </div>
     </aside>
   );

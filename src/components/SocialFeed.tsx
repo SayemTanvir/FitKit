@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { SocialActivity } from '../types';
+import { reactToFeed } from '../services/api';
+import toast from 'react-hot-toast';
 
 interface SocialFeedProps {
   activities: SocialActivity[];
@@ -25,23 +27,32 @@ export default function SocialFeed({ activities }: SocialFeedProps) {
 
 function ActivityItem({ activity }: { activity: SocialActivity }) {
   const [reactions, setReactions] = useState(activity.reactions);
-  const [activeEmoji, setActiveEmoji] = useState<string | null>(null);
+  const [activeEmoji, setActiveEmoji] = useState<string | null>(activity.activeReaction || null);
+  const [saving, setSaving] = useState(false);
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
 
-  const toggleReaction = (emoji: string) => {
-    const isActivating = activeEmoji !== emoji;
+  const toggleReaction = async (emoji: string) => {
+    if (user.role !== 'Member' || saving) return;
+    const reactionTypes = { '🔥': 'Fire', '💪': 'Flex', '👏': 'Clap' } as const;
+    const reactionType = reactionTypes[emoji as keyof typeof reactionTypes];
+    if (!reactionType) return;
 
-    setReactions((prev) =>
-      prev.map((r) => {
-        if (r.emoji === emoji) {
-          return { ...r, count: isActivating ? r.count + 1 : r.count - 1 };
-        }
-        if (r.emoji === activeEmoji) {
-          return { ...r, count: r.count - 1 };
-        }
-        return r;
-      })
-    );
-    setActiveEmoji(isActivating ? emoji : null);
+    setSaving(true);
+    try {
+      const result = await reactToFeed(Number(activity.id), reactionType);
+      const counts: Record<string, number> = {
+        '🔥': Number(result.fire_count || 0),
+        '💪': Number(result.flex_count || 0),
+        '👏': Number(result.clap_count || 0),
+      };
+      const activeMap: Record<string, string> = { Fire: '🔥', Flex: '💪', Clap: '👏' };
+      setReactions((previous) => previous.map((reaction) => ({ ...reaction, count: counts[reaction.emoji] || 0 })));
+      setActiveEmoji(result.my_reaction ? activeMap[result.my_reaction] : null);
+    } catch (error: any) {
+      toast.error(error.message || 'Could not save reaction');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -55,7 +66,7 @@ function ActivityItem({ activity }: { activity: SocialActivity }) {
         <div className="min-w-0">
           <p className="text-sm text-slate-200">
             <Link
-              to={`/profile/${activity.id || 1}`}
+              to={activity.userId ? `/profile/${activity.userId}` : '/profile'}
               className="font-semibold text-white hover:text-lime-400 transition-colors cursor-pointer"
             >
               {activity.name}
@@ -70,10 +81,11 @@ function ActivityItem({ activity }: { activity: SocialActivity }) {
           <button
             key={r.emoji}
             onClick={() => toggleReaction(r.emoji)}
+            disabled={user.role !== 'Member' || saving}
             className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border transition-colors ${
               activeEmoji === r.emoji
                 ? 'bg-lime-400/20 border-lime-400/50 text-lime-100'
-                : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 disabled:opacity-50'
             }`}
           >
             {r.emoji} <span className="font-mono-fk">{r.count}</span>

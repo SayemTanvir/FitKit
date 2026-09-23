@@ -5,46 +5,36 @@ import planRoutes from './routes/plan.routes';
 import exerciseRoutes from './routes/exercise.routes';
 import logRoutes from './routes/log.routes';
 import socialRoutes from './routes/social.routes';
+import { query } from './db';
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
+app.get('/api/health', async (_req, res) => {
+  try {
+    await query('SELECT 1');
+    res.status(200).json({ status: 'ok', database: 'connected' });
+  } catch {
+    res.status(503).json({ status: 'unavailable', database: 'disconnected' });
+  }
+});
+
 // Auth
 app.use('/api/auth', authRoutes);
 
 // Plans
 app.use('/api/plans', planRoutes);
-app.use('/api/plan', planRoutes);
 
 // Exercises
 app.use('/api/exercises', exerciseRoutes);
-app.use('/api/exercise', exerciseRoutes);
 
 // Workout & Activity Logs
 app.use('/api/logs', logRoutes);
-app.use('/api/log', logRoutes);
-app.use('/api/activity', logRoutes);
-app.use('/api/activities', logRoutes);
-app.use('/api/activity-logs', logRoutes);
-app.use('/api/activity_logs', logRoutes);
-app.use('/api/workouts', logRoutes);
-app.use('/api/workout', logRoutes);
-app.use('/api/workoutentry', logRoutes);
-app.use('/api/workoutentries', logRoutes);
-app.use('/api/workout-entry', logRoutes);
-app.use('/api/workout_entry', logRoutes);
 
 // Social Feed (Triggered by "Share to Feed")
 app.use('/api/social', socialRoutes);
-app.use('/api/socials', socialRoutes);
-app.use('/api/feed', socialRoutes);
-app.use('/api/feeds', socialRoutes);
-app.use('/api/social-feed', socialRoutes);
-app.use('/api/social_feed', socialRoutes);
-app.use('/api/posts', socialRoutes);
-app.use('/api/post', socialRoutes);
 
 // Catch-all 404 handler with terminal logging
 app.use((req, res) => {

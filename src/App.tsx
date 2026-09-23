@@ -7,6 +7,7 @@ import WorkoutPlans from "./pages/WorkoutPlans";
 import Progress from "./pages/Progress";
 import Social from "./pages/Social";
 import Profile from "./pages/Profile";
+import Settings from "./pages/Settings";
 import { Toaster } from "react-hot-toast";
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -47,7 +48,7 @@ export default function App() {
           <Route path="/activity" element={<Progress />} />
           <Route path="/social" element={<Social />} />
           <Route path="/achievements" element={<Profile />} />
-          <Route path="/settings" element={<Profile />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/profile/:userId" element={<Profile />} />
         </Route>

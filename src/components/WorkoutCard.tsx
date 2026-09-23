@@ -9,6 +9,8 @@ const iconMap: Record<ExerciseData['icon'], ReactNode> = {
 };
 
 interface WorkoutCardProps {
+  label?: string;
+  actionLabel?: string;
   planName: string;
   weekLabel: string;
   progressPct: number;
@@ -16,12 +18,12 @@ interface WorkoutCardProps {
   onStart?: () => void;
 }
 
-export default function WorkoutCard({ planName, weekLabel, progressPct, exercises, onStart }: WorkoutCardProps) {
+export default function WorkoutCard({ label = 'Active Plan', actionLabel = "Log Today's Workout", planName, weekLabel, progressPct, exercises, onStart }: WorkoutCardProps) {
   return (
     <div className="glass rounded-2xl p-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] uppercase tracking-wide text-slate-400 font-medium">Active Plan</p>
+          <p className="text-[11px] uppercase tracking-wide text-slate-400 font-medium">{label}</p>
           <h2 className="font-display font-semibold text-xl text-white mt-1">{planName}</h2>
         </div>
         <span className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full bg-emerald-400/10 border border-emerald-400/25 text-emerald-300">
@@ -37,8 +39,9 @@ export default function WorkoutCard({ planName, weekLabel, progressPct, exercise
         <ProgressBar value={progressPct} max={100} />
       </div>
 
-      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mt-6 mb-3">Up Next</p>
+      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mt-6 mb-3">Plan Exercises</p>
       <div className="space-y-2.5">
+        {exercises.length === 0 && <p className="text-sm text-slate-500">No exercises have been added to this plan yet.</p>}
         {exercises.map((ex) => (
           <div key={ex.name} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/10">
             <span className={`w-9 h-9 rounded-lg border flex items-center justify-center shrink-0 ${ex.iconBgClass}`}>
@@ -57,7 +60,7 @@ export default function WorkoutCard({ planName, weekLabel, progressPct, exercise
         onClick={onStart}
         className="btn-primary w-full mt-5 py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
       >
-        <Play className="w-4 h-4" /> Start Today's Workout
+        <Play className="w-4 h-4" /> {actionLabel}
       </button>
     </div>
   );

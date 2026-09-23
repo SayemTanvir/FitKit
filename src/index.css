@@ -56,6 +56,12 @@ body {
   .btn-cyan:hover {
     background: rgba(34, 211, 238, 0.18);
   }
+  .input-pro {
+    @apply w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-white/10 text-white text-sm outline-none transition-colors;
+  }
+  .input-pro:focus {
+    @apply border-cyan-400/60;
+  }
 }
 
 ::-webkit-scrollbar {

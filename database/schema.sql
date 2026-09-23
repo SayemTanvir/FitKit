@@ -80,6 +80,10 @@ CREATE TABLE Member (
     user_id INT PRIMARY KEY,
     daily_step_goal INT NOT NULL DEFAULT 10000
         CHECK (daily_step_goal > 0),
+    daily_calorie_goal INT NOT NULL DEFAULT 800
+        CHECK (daily_calorie_goal > 0),
+    daily_hydration_goal INT NOT NULL DEFAULT 2800
+        CHECK (daily_hydration_goal > 0),
     is_rest_mode BOOLEAN NOT NULL DEFAULT FALSE,
     CONSTRAINT fk_member_user
         FOREIGN KEY (user_id)
@@ -226,7 +230,7 @@ CREATE TABLE MemberWorkoutPlan (
 );
 
 
--- 5. TRANSACTIONAL LOGS (MANUAL TRACKING)
+-- 5. ACTIVITY LOGS (MANUAL TRACKING)
 
 CREATE TABLE WorkoutEntry (
     entry_id SERIAL PRIMARY KEY,

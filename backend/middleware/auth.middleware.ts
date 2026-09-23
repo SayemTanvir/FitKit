@@ -18,11 +18,17 @@ export function verifyToken(req: AuthRequest, res: Response, next: NextFunction)
     return res.status(401).json({ error: 'Access token required.' });
   }
 
-  jwt.verify(token, process.env.JWT_SECRET as string, (err, decoded) => {
+  jwt.verify(token, process.env.JWT_SECRET || 'secret_key', (err, decoded) => {
     if (err) {
       return res.status(401).json({ error: 'Invalid or expired session token.' });
     }
-    req.user = decoded as AuthenticatedUser;
+
+    const payload = decoded as Partial<AuthenticatedUser>;
+    if (!payload.userId || !payload.role) {
+      return res.status(401).json({ error: 'Invalid session token payload.' });
+    }
+
+    req.user = payload as AuthenticatedUser;
     next();
   });
 }

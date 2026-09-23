@@ -8,14 +8,27 @@ interface NavbarProps {
   onLogWater?: () => void;
 }
 
+function readStoredUser() {
+  try {
+    const stored = localStorage.getItem('user');
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+}
+
+function notificationKey() {
+  return `fitkit_notifications_${readStoredUser()?.id || 'guest'}`;
+}
+
 export default function Navbar({ onMenuClick }: NavbarProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const navigate = useNavigate();
+  const [user, setUser] = useState(readStoredUser());
 
   useEffect(() => {
-    // Check if notifications were explicitly stored (even if empty array)
-    const stored = localStorage.getItem('fitkit_notifications');
+    const stored = localStorage.getItem(notificationKey());
     
     if (stored !== null) {
       try {
@@ -23,15 +36,7 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
       } catch {
         setNotifications([]);
       }
-    } else {
-      // Only set initial mock data if localStorage has never been initialized
-      const initialMock = [
-        { id: 1, title: 'Database Synced', message: 'Database synced with FitKit backend', time: '2 hours ago' },
-        { id: 2, title: 'Role Verified', message: 'Role authorization verified', time: '4 hours ago' },
-      ];
-      setNotifications(initialMock);
-      localStorage.setItem('fitkit_notifications', JSON.stringify(initialMock));
-    }
+    } else setNotifications([]);
 
     // Listen for new notifications dispatched across the app
     const handleNewNotification = (e: any) => {
@@ -39,30 +44,20 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
     };
 
     window.addEventListener('fitkit_new_notification', handleNewNotification);
-    return () => window.removeEventListener('fitkit_new_notification', handleNewNotification);
+    const handleUserUpdate = () => setUser(readStoredUser());
+    window.addEventListener('fitkit_user_updated', handleUserUpdate);
+    return () => {
+      window.removeEventListener('fitkit_new_notification', handleNewNotification);
+      window.removeEventListener('fitkit_user_updated', handleUserUpdate);
+    };
   }, []);
   const clearNotifications = () => {
     setNotifications([]);
-    localStorage.setItem('fitkit_notifications', JSON.stringify([]));
+    localStorage.setItem(notificationKey(), JSON.stringify([]));
   };
-
-  // Safely parse stored user state
-  const getUser = () => {
-    try {
-      const stored = localStorage.getItem('user');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  };
-
-  const user = getUser();
 
   // Multi-tier check for Admin status
-  const isAdmin =
-    user?.role?.toLowerCase() === 'admin' ||
-    user?.email?.toLowerCase() === 'admin@fitkit.com' ||
-    user?.name?.toLowerCase().includes('admin');
+  const isAdmin = user?.role === 'Admin';
 
   const handleLogout = () => {
     localStorage.removeItem('token');

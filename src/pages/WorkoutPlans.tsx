@@ -1,28 +1,46 @@
 import React, { useEffect, useState } from 'react';
-import { fetchWorkoutPlans, createWorkoutPlan } from '../services/api';
-import { PlusCircle, Dumbbell } from 'lucide-react';
+import { fetchWorkoutPlans, createWorkoutPlan, deleteWorkoutPlan, fetchExercises, startWorkoutPlan } from '../services/api';
+import { PlusCircle, Dumbbell, Trash2, Play, CheckCircle2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function WorkoutPlans() {
   const user = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!) : null;
+  const role = user?.role;
   const [plans, setPlans] = useState<any[]>([]);
+  const [exercises, setExercises] = useState<any[]>([]);
   const [title, setTitle] = useState('');
   const [targetLevel, setTargetLevel] = useState('Beginner');
   const [goalCategory, setGoalCategory] = useState('Strength');
   const [durationWeeks, setDurationWeeks] = useState(4);
+  const [exerciseId, setExerciseId] = useState(0);
+  const [targetQuantity, setTargetQuantity] = useState(12);
   const [statusMsg, setStatusMsg] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
 
   const loadPlans = async () => {
     try {
       const data = await fetchWorkoutPlans();
       if (Array.isArray(data)) setPlans(data);
-    } catch (err) {
-      console.error('Failed to load plans:', err);
+      setError('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to load plans');
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     loadPlans();
-  }, []);
+    if (role === 'Admin') {
+      fetchExercises()
+        .then((items) => {
+          setExercises(items);
+          if (items.length > 0) setExerciseId(items[0].exercise_id);
+        })
+        .catch((requestError) => setError(requestError.message));
+    }
+  }, [role]);
 
   const handleCreatePlan = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,12 +52,35 @@ export default function WorkoutPlans() {
         target_level: targetLevel,
         goal_category: goalCategory,
         duration_weeks: Number(durationWeeks),
+        exercise_id: exerciseId,
+        target_quantity: Number(targetQuantity),
       });
       setTitle('');
       setStatusMsg('Plan published successfully!');
       loadPlans();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
+    }
+  };
+
+  const handleDeletePlan = async (planId: number) => {
+    if (!window.confirm('Delete this workout plan?')) return;
+    try {
+      await deleteWorkoutPlan(planId);
+      toast.success('Workout plan deleted');
+      loadPlans();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+  const handleStartPlan = async (planId: number) => {
+    try {
+      await startWorkoutPlan(planId);
+      toast.success('Active workout plan updated');
+      loadPlans();
+    } catch (err: any) {
+      toast.error(err.message);
     }
   };
 
@@ -105,6 +146,10 @@ export default function WorkoutPlans() {
                 Publish
               </button>
             </div>
+            <select value={exerciseId} onChange={(e) => setExerciseId(Number(e.target.value))} className="px-3.5 py-2.5 rounded-xl bg-slate-900 border border-white/10 text-white text-sm">
+              {exercises.map((exercise) => <option key={exercise.exercise_id} value={exercise.exercise_id}>{exercise.name}</option>)}
+            </select>
+            <input type="number" min={1} value={targetQuantity} onChange={(e) => setTargetQuantity(Number(e.target.value))} aria-label="Target reps or minutes" placeholder="Target reps/minutes" className="px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm" required />
           </form>
         </div>
       )}
@@ -112,6 +157,7 @@ export default function WorkoutPlans() {
       {/* Plans Catalog Table */}
       <div className="glass rounded-2xl p-6 overflow-hidden">
         <h2 className="font-display font-semibold text-lg text-white mb-4">Curated Catalog</h2>
+        {error && <p className="text-red-300 text-sm mb-4">{error}</p>}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-300">
             <thead className="bg-white/5 text-slate-400 uppercase text-xs">
@@ -122,12 +168,15 @@ export default function WorkoutPlans() {
                 <th className="py-3 px-4">Goal</th>
                 <th className="py-3 px-4">Duration</th>
                 <th className="py-3 px-4 rounded-r-xl">Curated By</th>
+                <th className="py-3 px-4 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {plans.length === 0 ? (
+              {loading ? (
+                <tr><td colSpan={7} className="py-8 text-center text-slate-500">Loading plans...</td></tr>
+              ) : plans.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-500">
+                  <td colSpan={7} className="py-8 text-center text-slate-500">
                     No workout plans published yet.
                   </td>
                 </tr>
@@ -137,11 +186,37 @@ export default function WorkoutPlans() {
                     <td className="py-3.5 px-4 font-mono text-cyan-400">#{p.plan_id}</td>
                     <td className="py-3.5 px-4 font-medium text-white flex items-center gap-2">
                       <Dumbbell className="w-4 h-4 text-cyan-400" /> {p.title}
+                      <span className="text-xs text-slate-500">({p.exercises?.length || 0} exercises)</span>
                     </td>
                     <td className="py-3.5 px-4">{p.target_level}</td>
                     <td className="py-3.5 px-4">{p.goal_category}</td>
                     <td className="py-3.5 px-4">{p.duration_weeks} Weeks</td>
                     <td className="py-3.5 px-4 text-slate-400">{p.curated_by}</td>
+                    {user?.role === 'Admin' && (
+                      <td className="py-3.5 px-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePlan(p.plan_id)}
+                          className="p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10"
+                          aria-label={`Delete ${p.title}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    )}
+                    {user?.role === 'Member' && (
+                      <td className="py-3.5 px-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleStartPlan(p.plan_id)}
+                          disabled={p.is_active}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 disabled:bg-emerald-500/10 disabled:text-emerald-300"
+                        >
+                          {p.is_active ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                          {p.is_active ? 'Active' : 'Start plan'}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}

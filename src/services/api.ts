@@ -1,127 +1,40 @@
-const BASE_URL = 'http://localhost:5000/api';
+const BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 function getAuthHeaders() {
   const token = localStorage.getItem('token');
   return {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {})
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
 
-// Authentication
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${BASE_URL}${path}`, options);
+  } catch {
+    throw new Error('Cannot reach the FitKit API. Start the app with npm run dev and check PostgreSQL.');
+  }
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    if (response.status === 401 && path !== '/auth/login') {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.assign('/login');
+    }
+    throw new Error(data.error || 'The server could not complete this request.');
+  }
+
+  return data as T;
+}
+
 export async function loginUser(credentials: { email: string; password: string }) {
-  const res = await fetch(`${BASE_URL}/auth/login`, {
+  return request<any>('/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(credentials),
   });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Login failed');
-  }
-  return res.json();
-}
-
-// Exercise Catalog
-export async function fetchExercises() {
-  const res = await fetch(`${BASE_URL}/exercises`, { headers: getAuthHeaders() });
-  return res.json();
-}
-
-// Workout Plans (Admin & Member)
-export async function fetchWorkoutPlans() {
-  const res = await fetch(`${BASE_URL}/plans`, { headers: getAuthHeaders() });
-  return res.json();
-}
-
-export async function createWorkoutPlan(plan: {
-  title: string;
-  target_level: string;
-  goal_category: string;
-  duration_weeks: number;
-}) {
-  const res = await fetch(`${BASE_URL}/plans`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify(plan),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to create plan');
-  }
-  return res.json();
-}
-
-// Member Activity Logging & Ownership
-export async function fetchMyWorkoutLogs() {
-  const res = await fetch(`${BASE_URL}/logs/workout`, { headers: getAuthHeaders() });
-  return res.json();
-}
-
-export async function logWorkout(entry: {
-  exercise_id: number;
-  quantity: number;
-  is_public: boolean;
-}) {
-  const res = await fetch(`${BASE_URL}/logs/workout`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify(entry),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to log workout');
-  }
-  return res.json();
-}
-
-export async function deleteWorkoutLog(entryId: number) {
-  const res = await fetch(`${BASE_URL}/logs/workout/${entryId}`, {
-    method: 'DELETE',
-    headers: getAuthHeaders(),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to delete log');
-  }
-  return res.json();
-}
-
-export async function fetchSocialFeed() {
-  const res = await fetch('http://localhost:5000/api/social/feed', {
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${localStorage.getItem('token')}`,
-    },
-  });
-  if (!res.ok) throw new Error('Failed to fetch social feed');
-  return res.json();
-}
-
-export async function fetchDailySummary() {
-  const res = await fetch(`${BASE_URL}/logs/summary`, { headers: getAuthHeaders() });
-  if (!res.ok) throw new Error('Failed to fetch daily summary');
-  return res.json();
-}
-
-export async function logHydration(amount_ml: number = 250) {
-  const res = await fetch(`${BASE_URL}/logs/hydration`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ amount_ml }),
-  });
-  if (!res.ok) throw new Error('Failed to log hydration');
-  return res.json();
-}
-
-export async function logSteps(steps_added: number = 1000, is_public: boolean = true) {
-  const res = await fetch(`${BASE_URL}/logs/steps`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ steps_added, is_public }),
-  });
-  if (!res.ok) throw new Error('Failed to log steps');
-  return res.json();
 }
 
 export async function registerUser(userData: {
@@ -129,18 +42,159 @@ export async function registerUser(userData: {
   email: string;
   password: string;
   gender?: string;
+  birth_date?: string;
   height_cm?: number;
   weight_kg?: number;
   fitness_level?: string;
+  primary_goal?: string;
 }) {
-  const res = await fetch(`${BASE_URL}/auth/register`, {
+  return request<any>('/auth/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(userData),
   });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Registration failed');
-  }
-  return res.json();
+}
+
+export async function fetchMyProfile(userId?: string) {
+  const path = userId ? `/auth/profile/${userId}` : '/auth/me';
+  return request<any>(path, { headers: getAuthHeaders() });
+}
+
+export async function updateMyProfile(profile: Record<string, unknown>) {
+  return request<any>('/auth/me', {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(profile),
+  });
+}
+
+export async function fetchExercises() {
+  return request<any[]>('/exercises', { headers: getAuthHeaders() });
+}
+
+export async function fetchWorkoutPlans() {
+  return request<any[]>('/plans', { headers: getAuthHeaders() });
+}
+
+export async function createWorkoutPlan(plan: {
+  title: string;
+  target_level: string;
+  goal_category: string;
+  duration_weeks: number;
+  exercise_id: number;
+  target_quantity: number;
+}) {
+  return request<any>('/plans', {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(plan),
+  });
+}
+
+export async function updateWorkoutPlan(planId: number, plan: {
+  title: string;
+  target_level: string;
+  goal_category: string;
+  duration_weeks: number;
+}) {
+  return request<any>(`/plans/${planId}`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(plan),
+  });
+}
+
+export async function deleteWorkoutPlan(planId: number) {
+  return request<{ message: string }>(`/plans/${planId}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+}
+
+export async function startWorkoutPlan(planId: number) {
+  return request<any>(`/plans/${planId}/start`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+}
+
+export async function fetchMyWorkoutLogs() {
+  return request<any[]>('/logs/workout', { headers: getAuthHeaders() });
+}
+
+export async function logWorkout(entry: {
+  exercise_id: number;
+  quantity: number;
+  is_public: boolean;
+}) {
+  return request<any>('/logs/workout', {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(entry),
+  });
+}
+
+export async function deleteWorkoutLog(entryId: number) {
+  return request<{ message: string }>(`/logs/workout/${entryId}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+}
+
+export async function fetchSocialFeed() {
+  return request<any[]>('/social/feed', { headers: getAuthHeaders() });
+}
+
+export async function fetchDailySummary() {
+  return request<any>('/logs/summary', { headers: getAuthHeaders() });
+}
+
+export async function fetchWeeklyAnalytics(days = 7) {
+  return request<any[]>(`/logs/analytics?days=${days}`, { headers: getAuthHeaders() });
+}
+
+export async function reactToFeed(feedId: number, reaction_type: 'Fire' | 'Flex' | 'Clap') {
+  return request<any>(`/social/feed/${feedId}/reaction`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ reaction_type }),
+  });
+}
+
+export async function logHydration(amount_ml = 250) {
+  return request<any>('/logs/hydration', {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ amount_ml }),
+  });
+}
+
+export async function fetchHydrationHistory() {
+  return request<any[]>('/logs/hydration', { headers: getAuthHeaders() });
+}
+
+export async function deleteHydrationEntry(entryId: number) {
+  return request<{ message: string }>(`/logs/hydration/${entryId}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+}
+
+export async function logSteps(steps_added = 1000, is_public = true) {
+  return request<any>('/logs/steps', {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ steps_added, is_public }),
+  });
+}
+
+export async function fetchStepHistory() {
+  return request<any[]>('/logs/steps', { headers: getAuthHeaders() });
+}
+
+export async function deleteStepEntry(entryId: number) {
+  return request<{ message: string }>(`/logs/steps/${entryId}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
 }

@@ -15,6 +15,19 @@ interface RegisterMemberDTO {
   daily_step_goal?: number;
 }
 
+interface UpdateProfileDTO {
+  name: string;
+  gender: 'Male' | 'Female';
+  birth_date: string;
+  height_cm: number;
+  weight_kg: number;
+  fitness_level: 'Beginner' | 'Intermediate' | 'Advanced';
+  primary_goal: string;
+  daily_step_goal?: number;
+  daily_calorie_goal?: number;
+  daily_hydration_goal?: number;
+}
+
 export async function registerMemberService(data: RegisterMemberDTO) {
   const saltRounds = 10;
   const passwordHash = await bcrypt.hash(data.password, saltRounds);
@@ -60,11 +73,19 @@ export async function registerMemberService(data: RegisterMemberDTO) {
 
     const token = jwt.sign(
       { userId: newUser.user_id, role: 'Member' },
-      process.env.JWT_SECRET as string,
+      process.env.JWT_SECRET || 'secret_key',
       { expiresIn: '1d' }
     );
 
-    return { user: { ...newUser, role: 'Member' }, token };
+    return {
+      user: {
+        ...newUser,
+        id: newUser.user_id,
+        role: 'Member',
+        status: 'Active Member',
+      },
+      token,
+    };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -74,11 +95,29 @@ export async function registerMemberService(data: RegisterMemberDTO) {
 }
 
 export async function loginUserService(email: string, password: string) {
-  // 1. Fetch user including role, status, and active_plan
   const result = await query(
-    `SELECT user_id, name, email, password_hash, role, status, active_plan 
-     FROM users 
-     WHERE LOWER(email) = LOWER($1)`,
+    `SELECT
+       u.user_id,
+       u.name,
+       u.email,
+       u.password_hash,
+       CASE
+         WHEN a.user_id IS NOT NULL THEN 'Admin'
+         WHEN m.user_id IS NOT NULL THEN 'Member'
+       END AS role,
+       a.admin_role,
+       (
+         SELECT wp.title
+         FROM MemberWorkoutPlan mwp
+         JOIN WorkoutPlan wp ON wp.plan_id = mwp.plan_id
+         WHERE mwp.user_id = u.user_id AND mwp.status = 'Active'
+         ORDER BY mwp.start_date DESC
+         LIMIT 1
+       ) AS active_plan
+     FROM users u
+     LEFT JOIN Admin a ON a.user_id = u.user_id
+     LEFT JOIN Member m ON m.user_id = u.user_id
+     WHERE LOWER(u.email) = LOWER($1)`,
     [email]
   );
 
@@ -88,29 +127,146 @@ export async function loginUserService(email: string, password: string) {
 
   const user = result.rows[0];
 
+  if (!user.role) {
+    return null;
+  }
+
   // 2. Verify password
   const isMatch = await bcrypt.compare(password, user.password_hash);
   if (!isMatch) {
     return null;
   }
 
-  // 3. Sign Token
   const token = jwt.sign(
-    { id: user.user_id, role: user.role },
+    { userId: user.user_id, role: user.role },
     process.env.JWT_SECRET || 'secret_key',
     { expiresIn: '24h' }
   );
 
-  // 4. Return full object expected by frontend Navbar & localStorage
   return {
     token,
     user: {
       id: user.user_id,
       name: user.name,
       email: user.email,
-      role: user.role || 'Admin',
-      status: user.status || (user.role === 'Admin' ? 'Admin' : 'Active Member'),
-      active_plan: user.active_plan || 'Member'
-    }
+      role: user.role,
+      status: user.role === 'Admin' ? user.admin_role : 'Active Member',
+      active_plan: user.active_plan,
+    },
   };
+}
+
+export async function getUserProfileService(userId: number) {
+  const profileResult = await query(
+    `SELECT
+       u.user_id AS id,
+       u.name,
+       u.email,
+       u.gender,
+       TO_CHAR(u.birth_date, 'YYYY-MM-DD') AS birth_date,
+       u.height_cm,
+       u.weight_kg,
+       u.fitness_level,
+       u.primary_goal,
+       u.created_at,
+       m.daily_step_goal,
+       m.daily_calorie_goal,
+       m.daily_hydration_goal,
+       a.admin_role,
+       CASE WHEN a.user_id IS NOT NULL THEN 'Admin' ELSE 'Member' END AS role,
+       COALESCE(rank_info.rank_name, 'Bronze') AS membership_rank,
+       EXTRACT(YEAR FROM AGE(CURRENT_DATE, u.created_at::DATE))::int AS membership_years,
+       (
+         EXTRACT(YEAR FROM AGE(CURRENT_DATE, u.created_at::DATE)) * 12 +
+         EXTRACT(MONTH FROM AGE(CURRENT_DATE, u.created_at::DATE))
+       )::int AS membership_months,
+       (
+         SELECT wp.title
+         FROM MemberWorkoutPlan mwp
+         JOIN WorkoutPlan wp ON wp.plan_id = mwp.plan_id
+         WHERE mwp.user_id = u.user_id AND mwp.status = 'Active'
+         ORDER BY mwp.start_date DESC
+         LIMIT 1
+       ) AS active_plan
+     FROM users u
+     LEFT JOIN Admin a ON a.user_id = u.user_id
+     LEFT JOIN Member m ON m.user_id = u.user_id
+     LEFT JOIN LATERAL (
+       SELECT mr.rank_name
+       FROM MembershipRank mr
+       WHERE mr.min_years <= EXTRACT(YEAR FROM AGE(CURRENT_DATE, u.created_at::DATE))
+       ORDER BY mr.min_years DESC
+       LIMIT 1
+     ) rank_info ON TRUE
+     WHERE u.user_id = $1`,
+    [userId]
+  );
+
+  if (profileResult.rows.length === 0) {
+    return null;
+  }
+
+  const achievementsResult = await query(
+    `SELECT
+       a.achievement_id AS id,
+       a.badge_name AS label,
+       a.criteria_description,
+       ma.earned_date
+     FROM Achievement a
+     LEFT JOIN MemberAchievement ma
+       ON ma.achievement_id = a.achievement_id AND ma.user_id = $1
+     ORDER BY a.achievement_id`,
+    [userId]
+  );
+
+  return {
+    user: profileResult.rows[0],
+    achievements: achievementsResult.rows,
+  };
+}
+
+export async function updateUserProfileService(
+  userId: number,
+  role: 'Admin' | 'Member',
+  data: UpdateProfileDTO
+) {
+  await query(
+    `UPDATE users
+     SET name = $1,
+         gender = $2,
+         birth_date = $3,
+         height_cm = $4,
+         weight_kg = $5,
+         fitness_level = $6,
+         primary_goal = $7
+     WHERE user_id = $8`,
+    [
+      data.name,
+      data.gender,
+      data.birth_date,
+      data.height_cm,
+      data.weight_kg,
+      data.fitness_level,
+      data.primary_goal,
+      userId,
+    ]
+  );
+
+  if (role === 'Member') {
+    await query(
+      `UPDATE Member
+       SET daily_step_goal = $1,
+           daily_calorie_goal = $2,
+           daily_hydration_goal = $3
+       WHERE user_id = $4`,
+      [
+        data.daily_step_goal,
+        data.daily_calorie_goal,
+        data.daily_hydration_goal,
+        userId,
+      ]
+    );
+  }
+
+  return getUserProfileService(userId);
 }
