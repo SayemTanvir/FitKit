@@ -183,6 +183,7 @@ export async function fetchLeaderboard(filters: {
   metric: 'steps' | 'calories' | 'workouts';
   period: 'today' | 'week' | 'month' | 'all';
   level: 'All' | 'Beginner' | 'Intermediate' | 'Advanced';
+  scope: 'all' | 'friends';
 }) {
   const params = new URLSearchParams(filters);
   return request<any[]>(`/social/leaderboard?${params}`, { headers: getAuthHeaders() });

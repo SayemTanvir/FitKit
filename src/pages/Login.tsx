@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Dumbbell, UserPlus, LogIn } from 'lucide-react';
 import { loginUser, registerUser } from '../services/api';
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function Login() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -20,13 +22,18 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    const cleanEmail = email.trim().toLowerCase();
+    if (!EMAIL_PATTERN.test(cleanEmail)) {
+      setError('Enter an email in the name@domain.com format.');
+      return;
+    }
     setLoading(true);
 
     try {
       if (isRegistering) {
         const data = await registerUser({
           name,
-          email,
+          email: cleanEmail,
           password,
           gender,
           birth_date: birthDate,
@@ -40,7 +47,7 @@ export default function Login() {
         localStorage.setItem('user', JSON.stringify(data.user));
         window.location.href = '/';
       } else {
-        const data = await loginUser({ email, password });
+        const data = await loginUser({ email: cleanEmail, password });
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
         window.location.href = '/';
@@ -117,6 +124,8 @@ export default function Login() {
             <input
               type="email"
               required
+              pattern={String.raw`^[^\s@]+@[^\s@]+\.[^\s@]+$`}
+              title="Enter an email in the name@domain.com format."
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="user@fitkit.com"

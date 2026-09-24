@@ -98,6 +98,7 @@ export const saveProgrammeStructure = (id: number, weeks: ProgrammeWeek[]) => ca
 export const publishProgramme = (id: number) => call<Programme>(`/${id}/publish`, 'POST');
 export const setProgrammeArchived = (id: number, archived: boolean) => call<Programme>(`/${id}/archive`, 'PATCH', { archived });
 export const newProgrammeVersion = (id: number) => call<Programme>(`/${id}/new-version`, 'POST');
+export const deleteProgrammeDraft = (id: number) => call<{ message: string; programme_deleted: boolean }>(`/${id}/draft`, 'DELETE');
 export const enrollProgramme = (id: number) => call<any>(`/${id}/enroll`, 'POST');
 export const myEnrollments = () => call<Enrollment[]>('/enrollments');
 export const setEnrollmentStatus = (id: number, status: 'Active' | 'Paused') => call<Enrollment>(`/enrollments/${id}`, 'PATCH', { status });

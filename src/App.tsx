@@ -64,26 +64,26 @@ export default function App() {
           <Route path="/" element={currentRole() === 'Admin' ? <AdminOverview /> : <Dashboard />} />
           <Route path="/admin" element={<RequireRole role="Admin"><AdminOverview /></RequireRole>} />
           <Route path="/workouts" element={<WorkoutPlans />} />
-          <Route path="/activity" element={<Progress />} />
+          <Route path="/activity" element={<RequireRole role="Member"><Progress /></RequireRole>} />
           <Route path="/social" element={<Social />} />
-          <Route path="/achievements" element={<Profile />} />
+          <Route path="/achievements" element={<RequireRole role="Member"><Profile /></RequireRole>} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/programmes" element={<ProgrammeCatalog />} />
           <Route path="/programmes/new" element={<RequireRole role="Admin"><ProgrammeBuilder /></RequireRole>} />
           <Route path="/programmes/:id/edit" element={<RequireRole role="Admin"><ProgrammeBuilder /></RequireRole>} />
           <Route path="/programmes/:id" element={<ProgrammeDetail />} />
-          <Route path="/my-programmes" element={<MyProgrammes />} />
-          <Route path="/my-programmes/:enrollmentId" element={<MyProgrammeSchedule />} />
-          <Route path="/my-programmes/:enrollmentId/sessions/:sessionId" element={<ProgrammeWorkoutSession />} />
+          <Route path="/my-programmes" element={<RequireRole role="Member"><MyProgrammes /></RequireRole>} />
+          <Route path="/my-programmes/:enrollmentId" element={<RequireRole role="Member"><MyProgrammeSchedule /></RequireRole>} />
+          <Route path="/my-programmes/:enrollmentId/sessions/:sessionId" element={<RequireRole role="Member"><ProgrammeWorkoutSession /></RequireRole>} />
           <Route path="/exercise-library" element={<RequireRole role="Admin"><ExerciseLibrary /></RequireRole>} />
-          <Route path="/community" element={<CommunityFeed />} />
-          <Route path="/community/people" element={<MemberDiscovery />} />
-          <Route path="/community/requests" element={<CommunityRequests />} />
-          <Route path="/community/settings" element={<CommunitySettings />} />
-          <Route path="/community/posts/:id" element={<CommunityPost />} />
-          <Route path="/community/members/:id" element={<CommunityProfile />} />
-          <Route path="/messages" element={<ConversationList />} />
-          <Route path="/messages/:id" element={<Conversation />} />
+          <Route path="/community" element={<RequireRole role="Member"><CommunityFeed /></RequireRole>} />
+          <Route path="/community/people" element={<RequireRole role="Member"><MemberDiscovery /></RequireRole>} />
+          <Route path="/community/requests" element={<RequireRole role="Member"><CommunityRequests /></RequireRole>} />
+          <Route path="/community/settings" element={<RequireRole role="Member"><CommunitySettings /></RequireRole>} />
+          <Route path="/community/posts/:id" element={<RequireRole role="Member"><CommunityPost /></RequireRole>} />
+          <Route path="/community/members/:id" element={<RequireRole role="Member"><CommunityProfile /></RequireRole>} />
+          <Route path="/messages" element={<RequireRole role="Member"><ConversationList /></RequireRole>} />
+          <Route path="/messages/:id" element={<RequireRole role="Member"><Conversation /></RequireRole>} />
           <Route path="/notifications" element={<NotificationCenter />} />
           <Route path="/moderation" element={<RequireRole role="Admin"><ModerationQueue /></RequireRole>} />
           <Route path="/settings" element={<Settings />} />

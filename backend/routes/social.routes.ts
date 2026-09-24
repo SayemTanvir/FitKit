@@ -9,9 +9,11 @@ router.get('/leaderboard', verifyToken, async (req: AuthRequest, res: Response) 
   const metric = String(req.query.metric || 'steps');
   const period = String(req.query.period || 'week');
   const level = String(req.query.level || 'All');
+  const scope = String(req.query.scope || 'all');
   if (!['steps', 'calories', 'workouts'].includes(metric) ||
       !['today', 'week', 'month', 'all'].includes(period) ||
-      !['All', 'Beginner', 'Intermediate', 'Advanced'].includes(level)) {
+      !['All', 'Beginner', 'Intermediate', 'Advanced'].includes(level) ||
+      !['all', 'friends'].includes(scope)) {
     return res.status(400).json({ error: 'Invalid leaderboard filters.' });
   }
   const days = { today: 1, week: 7, month: 30, all: null }[period as 'today' | 'week' | 'month' | 'all'];
@@ -38,7 +40,14 @@ router.get('/leaderboard', verifyToken, async (req: AuthRequest, res: Response) 
            WHERE user_id = u.user_id AND is_public = TRUE
              AND ($1::int IS NULL OR logged_at::date >= CURRENT_DATE - ($1::int - 1))
          ) w ON TRUE
-         WHERE $2 = 'All' OR u.fitness_level = $2
+         WHERE NOT EXISTS (SELECT 1 FROM Admin a WHERE a.user_id=u.user_id)
+           AND ($2 = 'All' OR u.fitness_level = $2)
+           AND ($4 = 'all' OR u.user_id = $5 OR EXISTS (
+             SELECT 1 FROM FriendRequest f
+             WHERE ((f.requester_id = $5 AND f.recipient_id = u.user_id)
+                 OR (f.recipient_id = $5 AND f.requester_id = u.user_id))
+               AND f.status = 'Accepted'
+           ))
        ), scored AS (
          SELECT *, CASE $3
            WHEN 'steps' THEN steps
@@ -52,7 +61,7 @@ router.get('/leaderboard', verifyToken, async (req: AuthRequest, res: Response) 
        FROM scored
        ORDER BY score DESC, name ASC
        LIMIT 50`,
-      [days, level, metric]
+      [days, level, metric, scope, req.user!.userId]
     );
     return res.status(200).json(result.rows);
   } catch (err) {

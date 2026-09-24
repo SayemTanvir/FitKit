@@ -13,6 +13,8 @@ dist/
 dist-ssr/
 build/
 *.log
+*.sql.dump
+backup.sql
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

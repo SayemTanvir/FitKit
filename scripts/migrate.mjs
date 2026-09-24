@@ -3,12 +3,24 @@ import dotenv from 'dotenv';
 import pg from 'pg';
 
 dotenv.config({ path: 'backend/.env', quiet: true });
+
+const requiredDatabaseSetting = (name) => {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(`Missing required database setting: ${name}`);
+  }
+  return value;
+};
+
 const pool = new pg.Pool({
-  host: process.env.DB_HOST || 'localhost',
+  host: requiredDatabaseSetting('DB_HOST'),
   port: Number(process.env.DB_PORT || 5432),
-  database: process.env.DB_NAME || 'FitKitDB',
-  user: process.env.DB_USER || 'postgres',
-  password: String(process.env.DB_PASSWORD || ''),
+  database: requiredDatabaseSetting('DB_NAME'),
+  user: requiredDatabaseSetting('DB_USER'),
+  password: requiredDatabaseSetting('DB_PASSWORD'),
+  ssl: process.env.DB_SSL === 'true'
+    ? { rejectUnauthorized: false }
+    : undefined,
 });
 
 try {

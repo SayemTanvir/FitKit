@@ -80,25 +80,27 @@ router.get('/media/:id',async(req:AuthRequest,res:Response)=>{
   return res.send(asset.content);
 });
 
-router.get('/members', async (req: AuthRequest,res: Response)=>{
+router.get('/members', member, async (req: AuthRequest,res: Response)=>{
   const q=String(req.query.q||'').trim().slice(0,60), limit=Math.min(Math.max(Number(req.query.limit)||20,1),50);
   const result=await query(`SELECT u.user_id,u.name,mp.username,mp.is_private,mp.photo_url,
       CASE WHEN mp.is_private THEN '' ELSE mp.bio END AS bio
-    FROM MemberProfile mp JOIN users u ON u.user_id=mp.user_id
+    FROM MemberProfile mp JOIN Member m ON m.user_id=mp.user_id JOIN users u ON u.user_id=mp.user_id
     WHERE mp.user_id<>$1 AND (u.name ILIKE $2 OR mp.username ILIKE $2)
+      AND NOT EXISTS (SELECT 1 FROM Admin a WHERE a.user_id=mp.user_id)
       AND NOT EXISTS (SELECT 1 FROM UserBlock b WHERE (b.blocker_id=$1 AND b.blocked_id=mp.user_id) OR (b.blocker_id=mp.user_id AND b.blocked_id=$1))
     ORDER BY u.name LIMIT $3`,[req.user!.userId,`%${q}%`,limit]);
   return res.json(result.rows);
 });
 
-router.get('/members/:id', async (req: AuthRequest,res: Response)=>{
+router.get('/members/:id', member, async (req: AuthRequest,res: Response)=>{
   const id=integer(req.params.id); if(!id) return res.status(400).json({error:'Invalid member ID.'});
   if(await blocked(req.user!.userId,id)) return res.status(404).json({error:'Member not found.'});
   const result=await query(`SELECT u.user_id,u.name,mp.username,mp.bio,mp.interests,mp.photo_url,mp.is_private,mp.dm_policy,u.created_at,
     (SELECT COUNT(*)::int FROM FollowRelationship WHERE followed_id=$1 AND status='Accepted') AS followers,
     (SELECT COUNT(*)::int FROM FollowRelationship WHERE follower_id=$1 AND status='Accepted') AS following,
     (SELECT COUNT(*)::int FROM SocialPost WHERE user_id=$1 AND deleted_at IS NULL) AS posts
-    FROM MemberProfile mp JOIN users u ON u.user_id=mp.user_id WHERE mp.user_id=$1`,[id]);
+    FROM MemberProfile mp JOIN Member m ON m.user_id=mp.user_id JOIN users u ON u.user_id=mp.user_id
+    WHERE mp.user_id=$1 AND NOT EXISTS (SELECT 1 FROM Admin a WHERE a.user_id=mp.user_id)`,[id]);
   if(!result.rowCount) return res.status(404).json({error:'Member not found.'});
   const rel=await relation(req.user!.userId,id);
   const allowed=id===req.user!.userId||!result.rows[0].is_private||rel?.following==='Accepted'||rel?.friendship==='Accepted';
@@ -284,7 +286,29 @@ router.post('/messages/:id', member, async (req: AuthRequest,res: Response)=>{co
 
 router.get('/notifications', async (req: AuthRequest,res: Response)=>{const before=integer(req.query.before),result=await query('SELECT notification_id,title,message,notification_type,link_path,is_read,created_at FROM Notification WHERE user_id=$1 AND ($2::int IS NULL OR notification_id<$2) ORDER BY notification_id DESC LIMIT 50',[req.user!.userId,before]);return res.json(result.rows);});
 router.patch('/notifications/:id', async (req: AuthRequest,res: Response)=>{const result=await query('UPDATE Notification SET is_read=TRUE WHERE notification_id=$1 AND user_id=$2 RETURNING notification_id',[integer(req.params.id),req.user!.userId]);if(!result.rowCount)return res.status(404).json({error:'Notification not found.'});return res.json(result.rows[0]);});
-router.post('/reports', member, async (req: AuthRequest,res: Response)=>{const type=String(req.body?.target_type||''),targetId=integer(req.body?.target_id),reason=String(req.body?.reason||'').trim();if(!['Member','Post','Comment','Message'].includes(type)||!targetId||reason.length<5||reason.length>500)return res.status(400).json({error:'Provide a valid target and a reason of 5–500 characters.'});if(!rate(req.user!.userId,'report',5))return res.status(429).json({error:'Too many reports.'});const result=await query('INSERT INTO ContentReport (reporter_id,target_type,target_id,reason) VALUES ($1,$2,$3,$4) RETURNING report_id',[req.user!.userId,type,targetId,reason]);return res.status(201).json(result.rows[0]);});
+router.delete('/notifications/:id', async (req: AuthRequest,res: Response)=>{const result=await query('DELETE FROM Notification WHERE notification_id=$1 AND user_id=$2 RETURNING notification_id',[integer(req.params.id),req.user!.userId]);if(!result.rowCount)return res.status(404).json({error:'Notification not found.'});return res.json({message:'Notification deleted.'});});
+router.delete('/notifications', async (req: AuthRequest,res: Response)=>{await query('DELETE FROM Notification WHERE user_id=$1',[req.user!.userId]);return res.json({message:'Notifications cleared.'});});
+router.post('/reports', member, async (req: AuthRequest,res: Response)=>{
+  const type=String(req.body?.target_type||''),targetId=integer(req.body?.target_id),reason=String(req.body?.reason||'').trim();
+  if(!['Member','Post','Comment','Message'].includes(type)||!targetId||reason.length<5||reason.length>500)return res.status(400).json({error:'Provide a valid target and a reason of 5–500 characters.'});
+  if(!rate(req.user!.userId,'report',5))return res.status(429).json({error:'Too many reports.'});
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const result=await client.query('INSERT INTO ContentReport (reporter_id,target_type,target_id,reason) VALUES ($1,$2,$3,$4) RETURNING report_id',[req.user!.userId,type,targetId,reason]);
+    await client.query(
+      `INSERT INTO Notification (user_id,title,message,notification_type,link_path)
+       SELECT a.user_id,'New moderation report',$1,'System','/moderation' FROM Admin a`,
+      [`${type} #${targetId} was reported and needs review.`]
+    );
+    await client.query('COMMIT');
+    return res.status(201).json(result.rows[0]);
+  }catch(error){
+    await client.query('ROLLBACK');
+    console.error('Create report:',error);
+    return res.status(500).json({error:'Could not submit report.'});
+  }finally{client.release();}
+});
 router.get('/moderation/reports', requireRole('Admin'), async (_req: AuthRequest,res: Response)=>{const result=await query(`SELECT r.*,u.name AS reporter_name,mp.photo_url FROM ContentReport r JOIN users u ON u.user_id=r.reporter_id LEFT JOIN MemberProfile mp ON mp.user_id=r.reporter_id WHERE r.status='Open' ORDER BY r.created_at DESC LIMIT 100`);return res.json(result.rows);});
 router.patch('/moderation/reports/:id', requireRole('Admin'), async (req: AuthRequest,res: Response)=>{const status=String(req.body?.status||''),note=String(req.body?.note||'').slice(0,2000),remove=req.body?.remove===true;if(!['Resolved','Dismissed'].includes(status)||remove&&status!=='Resolved')return res.status(400).json({error:'Choose a valid moderation decision.'});const client=await pool.connect();try{await client.query('BEGIN');const result=await client.query(`UPDATE ContentReport SET status=$1,reviewer_id=$2,resolved_at=CURRENT_TIMESTAMP WHERE report_id=$3 AND status='Open' RETURNING *`,[status,req.user!.userId,integer(req.params.id)]);if(!result.rowCount){await client.query('ROLLBACK');return res.status(404).json({error:'Open report not found.'});}const report=result.rows[0];if(remove&&report.target_type==='Post')await client.query('UPDATE SocialPost SET deleted_at=CURRENT_TIMESTAMP WHERE post_id=$1',[report.target_id]);if(remove&&report.target_type==='Comment')await client.query('UPDATE PostComment SET deleted_at=CURRENT_TIMESTAMP WHERE comment_id=$1',[report.target_id]);await client.query('INSERT INTO ModerationAction (admin_id,report_id,action,note) VALUES ($1,$2,$3,$4)',[req.user!.userId,report.report_id,remove?`Remove${report.target_type}`:status,note]);await client.query('COMMIT');return res.json(report);}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}});
 router.patch('/moderation/members/:id/suspension', requireRole('Admin'), async (req: AuthRequest,res: Response)=>{

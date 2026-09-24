@@ -7,6 +7,7 @@ import UserAvatar from '../components/UserAvatar';
 type Metric = 'steps' | 'calories' | 'workouts';
 type Period = 'today' | 'week' | 'month' | 'all';
 type Level = 'All' | 'Beginner' | 'Intermediate' | 'Advanced';
+type Scope = 'all' | 'friends';
 
 interface Entry {
   user_id: number;
@@ -24,6 +25,7 @@ export default function LeaderboardPage() {
   const [metric, setMetric] = useState<Metric>('steps');
   const [period, setPeriod] = useState<Period>('week');
   const [level, setLevel] = useState<Level>('All');
+  const [scope, setScope] = useState<Scope>('all');
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -31,12 +33,12 @@ export default function LeaderboardPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchLeaderboard({ metric, period, level })
+    fetchLeaderboard({ metric, period, level, scope })
       .then((data) => { if (!cancelled) { setEntries(data); setError(''); } })
       .catch((requestError) => { if (!cancelled) setError(requestError.message || 'Could not load leaderboard'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [metric, period, level]);
+  }, [metric, period, level, scope]);
 
   const updateMetric = (value: Metric) => { setLoading(true); setMetric(value); };
   const updatePeriod = (value: Period) => { setLoading(true); setPeriod(value); };
@@ -49,7 +51,12 @@ export default function LeaderboardPage() {
         <p className="text-sm text-slate-400 mt-2">Compare member activity using public logs only. Private workouts and steps never count here.</p>
       </div>
 
-      <div className="glass rounded-2xl p-5 grid sm:grid-cols-3 gap-4">
+      <div className="glass rounded-2xl p-5 grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <label className="text-xs font-semibold text-slate-400">People
+          <select value={scope} onChange={(event) => { setLoading(true); setScope(event.target.value as Scope); }} className="input-pro mt-1.5">
+            <option value="all">All members</option><option value="friends">My friends + me</option>
+          </select>
+        </label>
         <label className="text-xs font-semibold text-slate-400">Metric
           <select value={metric} onChange={(event) => updateMetric(event.target.value as Metric)} className="input-pro mt-1.5">
             {Object.entries(metricLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -74,7 +81,7 @@ export default function LeaderboardPage() {
         </div>
         {error && <p role="alert" className="text-sm text-red-300 mb-4">{error}</p>}
         {loading ? <p className="text-sm text-slate-400 py-6">Loading rankings...</p> : !error && entries.length === 0 ? (
-          <p className="text-sm text-slate-400 py-6">No members match these filters.</p>
+          <p className="text-sm text-slate-400 py-6">{scope === 'friends' ? 'Add friends to build your friends leaderboard.' : 'No members match these filters.'}</p>
         ) : !error && (
           <div className="space-y-2">
             {entries.every((entry) => Number(entry.score) === 0) && <p className="text-sm text-amber-200 mb-3">No public {metricUnits[metric]} logged in this period yet.</p>}

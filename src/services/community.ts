@@ -33,6 +33,8 @@ export const messages=(id:number,before?:number)=>request<any[]>(`/messages/${id
 export const sendMessage=(id:number,body:string)=>request<any>(`/messages/${id}`,'POST',{body});
 export const notifications=()=>request<any[]>('/notifications');
 export const readNotification=(id:number)=>request<any>(`/notifications/${id}`,'PATCH');
+export const deleteNotification=(id:number)=>request<any>(`/notifications/${id}`,'DELETE');
+export const clearNotifications=()=>request<any>('/notifications','DELETE');
 export const reportContent=(target_type:string,target_id:number,reason:string)=>request<any>('/reports','POST',{target_type,target_id,reason});
 export const moderationReports=()=>request<any[]>('/moderation/reports');
 export const resolveReport=(id:number,status:'Resolved'|'Dismissed',note:string,remove=false)=>request<any>(`/moderation/reports/${id}`,'PATCH',{status,note,remove});

@@ -9,7 +9,7 @@ import ReactionBar from './ReactionBar';
 import { reactions, type ReactionType } from '../services/reactions';
 
 export default function SocialFeed({ activities }: { activities: SocialActivity[] }) {
-  return <div className="glass rounded-2xl p-6 flex flex-col"><div className="flex items-center justify-between mb-4"><h2 className="font-display font-semibold text-lg text-white">Social Feed</h2><Users className="w-4 h-4 text-slate-400" /></div><div className="space-y-4 overflow-y-auto max-h-[420px] pr-1">{activities.map((activity)=><ActivityItem key={activity.id} activity={activity}/>)}</div></div>;
+  return <div className="glass rounded-2xl p-6 flex flex-col"><div className="flex items-center justify-between mb-4"><div className="flex items-center gap-2"><Users className="w-4 h-4 text-lime-300" /><h2 className="font-display font-semibold text-lg text-white">Social Feed</h2></div><Link to="/community" className="text-xs font-semibold text-cyan-300 hover:text-cyan-200">Open community →</Link></div>{activities.length===0?<p className="text-sm text-slate-400 py-6">No visible activity yet.</p>:<div className="space-y-4 overflow-y-auto max-h-[640px] pr-1">{activities.map((activity)=><ActivityItem key={activity.id} activity={activity}/>)}</div>}</div>;
 }
 
 function ActivityItem({ activity }: { activity: SocialActivity }) {

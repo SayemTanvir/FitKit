@@ -12,12 +12,23 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 dotenv.config();
 
+const requiredDatabaseSetting = (name: string): string => {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(`Missing required database setting: ${name}`);
+  }
+  return value;
+};
+
 const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
+  host: requiredDatabaseSetting('DB_HOST'),
   port: parseInt(process.env.DB_PORT || '5432', 10),
-  database: process.env.DB_NAME || 'FitKitDB',
-  user: process.env.DB_USER || 'postgres',
-  password: String(process.env.DB_PASSWORD || ''),
+  database: requiredDatabaseSetting('DB_NAME'),
+  user: requiredDatabaseSetting('DB_USER'),
+  password: requiredDatabaseSetting('DB_PASSWORD'),
+  ssl: process.env.DB_SSL === 'true'
+    ? { rejectUnauthorized: false }
+    : undefined,
 });
 
 pool.on('error', (err) => {

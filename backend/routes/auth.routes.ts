@@ -10,6 +10,12 @@ import { query } from '../db';
 
 const router = Router();
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function normalizedEmail(value: unknown) {
+  return String(value || '').trim().toLowerCase();
+}
+
 function isValidBirthDate(value: unknown) {
   const text = String(value || '');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
@@ -39,7 +45,8 @@ router.post('/register', async (req: Request, res: Response) => {
     const validLevel = ['Beginner', 'Intermediate', 'Advanced'].includes(fitness_level);
     const validGender = gender === 'Male' || gender === 'Female';
     const validDate = isValidBirthDate(birth_date);
-    if (!String(name || '').trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '')) || String(password || '').length < 8) {
+    const cleanEmail = normalizedEmail(email);
+    if (!String(name || '').trim() || !EMAIL_PATTERN.test(cleanEmail) || String(password || '').length < 8) {
       return res.status(400).json({ error: 'Provide a name, valid email, and password of at least 8 characters.' });
     }
     if (!validDate || !validGender || !validLevel || !(Number(height_cm) > 0) || !(Number(weight_kg) > 0)) {
@@ -48,7 +55,7 @@ router.post('/register', async (req: Request, res: Response) => {
 
     const newMember = await registerMemberService({
       name: String(name).trim(),
-      email: String(email).trim().toLowerCase(),
+      email: cleanEmail,
       password,
       gender,
       birth_date,
@@ -76,10 +83,11 @@ router.post('/register', async (req: Request, res: Response) => {
 router.post('/login', async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body || {};
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required.' });
+    const cleanEmail = normalizedEmail(email);
+    if (!EMAIL_PATTERN.test(cleanEmail) || !password) {
+      return res.status(400).json({ error: 'Enter an email in the name@domain.com format and a password.' });
     }
-    const result = await loginUserService(email, password);
+    const result = await loginUserService(cleanEmail, password);
     if (!result) {
       return res.status(401).json({ error: 'Invalid email or password.' });
     }

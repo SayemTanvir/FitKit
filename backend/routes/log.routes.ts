@@ -1,5 +1,5 @@
 import { Response, Router } from 'express';
-import { query } from '../db';
+import pool, { query } from '../db';
 import {
   AuthRequest,
   requireRole,
@@ -205,17 +205,28 @@ router.post(
       return res.status(400).json({ error: 'steps_added must be a positive whole number.' });
     }
 
+    const client = await pool.connect();
     try {
-      const result = await query(
+      await client.query('BEGIN');
+      const result = await client.query(
         `INSERT INTO StepEntry (user_id, steps_added, is_public)
          VALUES ($1, $2, $3)
          RETURNING *`,
         [req.user!.userId, stepsAdded, isPublic]
       );
+      await client.query(
+        `INSERT INTO Notification (user_id,title,message,notification_type,link_path)
+         VALUES ($1,'Steps logged',$2,'Goal','/activity')`,
+        [req.user!.userId, `Added ${stepsAdded.toLocaleString()} steps.`]
+      );
+      await client.query('COMMIT');
       return res.status(201).json(result.rows[0]);
     } catch (err) {
+      await client.query('ROLLBACK');
       console.error('Log steps error:', err);
       return res.status(500).json({ error: 'Failed to record steps.' });
+    } finally {
+      client.release();
     }
   }
 );
@@ -231,17 +242,28 @@ router.post(
       return res.status(400).json({ error: 'amount_ml must be a positive whole number.' });
     }
 
+    const client = await pool.connect();
     try {
-      const result = await query(
+      await client.query('BEGIN');
+      const result = await client.query(
         `INSERT INTO HydrationEntry (user_id, amount_ml, is_public)
          VALUES ($1, $2, $3)
          RETURNING *`,
         [req.user!.userId, amountMl, isPublic]
       );
+      await client.query(
+        `INSERT INTO Notification (user_id,title,message,notification_type,link_path)
+         VALUES ($1,'Hydration logged',$2,'Goal','/activity')`,
+        [req.user!.userId, `Added ${amountMl.toLocaleString()} ml of water.`]
+      );
+      await client.query('COMMIT');
       return res.status(201).json(result.rows[0]);
     } catch (err) {
+      await client.query('ROLLBACK');
       console.error('Log hydration error:', err);
       return res.status(500).json({ error: 'Failed to record hydration.' });
+    } finally {
+      client.release();
     }
   }
 );

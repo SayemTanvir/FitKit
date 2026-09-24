@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, Bell, LogOut, Trash2 } from 'lucide-react';
+import { Menu, Bell, LogOut } from 'lucide-react';
 import { notifications as fetchCommunityNotifications } from '../services/community';
 import UserAvatar from './UserAvatar';
 
@@ -19,54 +19,35 @@ function readStoredUser() {
   }
 }
 
-function notificationKey() {
-  return `fitkit_notifications_${readStoredUser()?.id || 'guest'}`;
-}
-
 export default function Navbar({ onMenuClick }: NavbarProps) {
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]);
   const [databaseUnread, setDatabaseUnread] = useState(0);
   const navigate = useNavigate();
   const [user, setUser] = useState(readStoredUser());
+  const refreshNotifications = useCallback(() => {
+    fetchCommunityNotifications()
+      .then((items) => setDatabaseUnread(items.filter((item) => !item.is_read).length))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
-    const stored = localStorage.getItem(notificationKey());
-    
-    if (stored !== null) {
-      try {
-        setNotifications(JSON.parse(stored));
-      } catch {
-        setNotifications([]);
-      }
-    } else setNotifications([]);
-
-    // Listen for new notifications dispatched across the app
-    const handleNewNotification = (e: any) => {
-      setNotifications((prev) => [e.detail, ...prev]);
-    };
-
-    window.addEventListener('fitkit_new_notification', handleNewNotification);
     const handleUserUpdate = () => setUser(readStoredUser());
     window.addEventListener('fitkit_user_updated', handleUserUpdate);
     window.addEventListener('fitkit_profile_photo_changed', handleUserUpdate);
     return () => {
-      window.removeEventListener('fitkit_new_notification', handleNewNotification);
       window.removeEventListener('fitkit_user_updated', handleUserUpdate);
       window.removeEventListener('fitkit_profile_photo_changed', handleUserUpdate);
     };
   }, []);
   useEffect(() => {
-    const refresh = () => fetchCommunityNotifications().then((items) => setDatabaseUnread(items.filter((item) => !item.is_read).length)).catch(() => {});
-    refresh();
-    const timer = window.setInterval(refresh, 15000);
-    return () => window.clearInterval(timer);
-  }, []);
-  const clearNotifications = () => {
-    setNotifications([]);
-    localStorage.setItem(notificationKey(), JSON.stringify([]));
-  };
-
+    refreshNotifications();
+    const timer = window.setInterval(refreshNotifications, 15000);
+    window.addEventListener('fitkit_notifications_changed', refreshNotifications);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('fitkit_notifications_changed', refreshNotifications);
+    };
+  }, [refreshNotifications]);
   // Multi-tier check for Admin status
   const isAdmin = user?.role === 'Admin';
 
@@ -114,14 +95,14 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
           {/* Notifications */}
           <div className="relative">
             <button
-              onClick={() => setShowNotifications((v) => !v)}
+              onClick={() => { refreshNotifications(); setShowNotifications((v) => !v); }}
               className="relative text-slate-300 hover:text-white p-2 rounded-xl hover:bg-white/5 cursor-pointer"
               aria-label="Notifications"
             >
               <Bell className="w-5 h-5" />
-              {notifications.length + databaseUnread > 0 && (
+              {databaseUnread > 0 && (
                 <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-cyan-400 text-[10px] font-bold text-slate-900 flex items-center justify-center">
-                  {notifications.length + databaseUnread}
+                  {databaseUnread}
                 </span>
               )}
             </button>
@@ -129,30 +110,12 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
               <div className="absolute right-0 mt-2 w-80 rounded-2xl bg-slate-900 border border-slate-700 p-3 shadow-2xl z-50">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-800 mb-2">
                   <p className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Notifications</p>
-                  {notifications.length > 0 && (
-                    <button
-                      onClick={clearNotifications}
-                      className="text-[11px] text-slate-400 hover:text-lime-300 flex items-center gap-1 cursor-pointer transition"
-                    >
-                      <Trash2 className="w-3 h-3" /> Clear all
-                    </button>
-                  )}
                 </div>
                 <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
                   <button type="button" onClick={() => { setShowNotifications(false); navigate('/notifications'); }} className="w-full text-left px-3 py-2 rounded-xl bg-cyan-500/10 text-cyan-200 text-xs font-semibold">
                     Open notification centre {databaseUnread > 0 ? `(${databaseUnread} unread)` : ''}
                   </button>
-                  {notifications.length === 0 ? (
-                    <p className="text-xs text-slate-500 text-center py-6">No new notifications</p>
-                  ) : (
-                    notifications.map((n, idx) => (
-                      <div key={n.id || idx} className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-800/80 transition border border-slate-700/60">
-                        <p className="text-xs font-bold text-lime-300">{n.title}</p>
-                        <p className="text-xs text-slate-200 mt-0.5">{n.message}</p>
-                        <p className="text-[10px] text-slate-400 mt-1">{n.time || 'Just now'}</p>
-                      </div>
-                    ))
-                  )}
+                  <p className="text-xs text-slate-500 text-center py-4">{databaseUnread > 0 ? 'Open the centre to review your unread items.' : 'No unread notifications.'}</p>
                 </div>
               </div>
             )}

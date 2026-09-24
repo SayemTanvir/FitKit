@@ -219,13 +219,63 @@ router.put('/:id', requireRole('Admin'), async (req: AuthRequest, res: Response)
     const owned=await query("SELECT 1 FROM MediaAsset WHERE media_id=$1 AND owner_id=$2 AND purpose='Programme'",[Number(data.coverUrl.split('/').at(-1)),req.user!.userId]);
     if(!owned.rowCount)return res.status(403).json({error:'Cover image does not belong to you.'});
   }
-  const draft = await query(`SELECT pv.version_id FROM ProgrammeVersion pv JOIN TrainingProgramme tp ON tp.programme_id=pv.programme_id WHERE tp.programme_id=$1 AND tp.admin_id=$2 AND pv.status='Draft' ORDER BY pv.version_number DESC LIMIT 1`, [programmeId, req.user!.userId]);
+  const draft = await query(`SELECT pv.version_id,tp.duration_weeks FROM ProgrammeVersion pv JOIN TrainingProgramme tp ON tp.programme_id=pv.programme_id WHERE tp.programme_id=$1 AND tp.admin_id=$2 AND pv.status='Draft' ORDER BY pv.version_number DESC LIMIT 1`, [programmeId, req.user!.userId]);
   if (!draft.rowCount) return res.status(409).json({ error: 'Create a new draft version before editing a published programme.' });
-  await query(
-    `UPDATE TrainingProgramme SET name=$1,description=$2,cover_url=$3,goal=$4,difficulty=$5,duration_weeks=$6,days_per_week=$7,session_minutes=$8,environment=$9,equipment=$10,audience=$11,prerequisites=$12,restrictions=$13,target_muscles=$14,tags=$15,visibility=$16,updated_at=CURRENT_TIMESTAMP WHERE programme_id=$17`,
-    [data.name,data.description,data.coverUrl,data.goal,data.difficulty,data.durationWeeks,data.daysPerWeek,data.sessionMinutes,data.environment,data.equipment,data.audience,data.prerequisites,data.restrictions,data.targetMuscles,data.tags,data.visibility,programmeId]
-  );
-  return res.json(await loadProgramme(programmeId, draft.rows[0].version_id));
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `UPDATE TrainingProgramme SET name=$1,description=$2,cover_url=$3,goal=$4,difficulty=$5,duration_weeks=$6,days_per_week=$7,session_minutes=$8,environment=$9,equipment=$10,audience=$11,prerequisites=$12,restrictions=$13,target_muscles=$14,tags=$15,visibility=$16,updated_at=CURRENT_TIMESTAMP WHERE programme_id=$17`,
+      [data.name,data.description,data.coverUrl,data.goal,data.difficulty,data.durationWeeks,data.daysPerWeek,data.sessionMinutes,data.environment,data.equipment,data.audience,data.prerequisites,data.restrictions,data.targetMuscles,data.tags,data.visibility,programmeId]
+    );
+    await client.query('DELETE FROM ProgrammeWeek WHERE version_id=$1 AND week_number>$2', [draft.rows[0].version_id,data.durationWeeks]);
+    for (let week = Number(draft.rows[0].duration_weeks) + 1; week <= data.durationWeeks; week++) {
+      const added = await client.query('INSERT INTO ProgrammeWeek (version_id,week_number,title) VALUES ($1,$2,$3) RETURNING week_id', [draft.rows[0].version_id,week,`Week ${week}`]);
+      for (let day = 1; day <= 7; day++) {
+        await client.query('INSERT INTO ProgrammeDay (week_id,day_number,day_type,title) VALUES ($1,$2,$3,$4)', [added.rows[0].week_id,day,'Rest',`Day ${day}`]);
+      }
+    }
+    await client.query('COMMIT');
+    return res.json(await loadProgramme(programmeId, draft.rows[0].version_id));
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Update programme:', error);
+    return res.status(500).json({ error: 'Could not update programme details.' });
+  } finally {
+    client.release();
+  }
+});
+
+router.delete('/:id/draft', requireRole('Admin'), async (req: AuthRequest, res: Response) => {
+  const programmeId = Number(req.params.id);
+  if (!Number.isInteger(programmeId) || programmeId < 1) return res.status(400).json({ error: 'Invalid programme ID.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const draft = await client.query(
+      `SELECT pv.version_id,
+              EXISTS (SELECT 1 FROM ProgrammeVersion published WHERE published.programme_id=tp.programme_id AND published.status='Published') AS has_published
+       FROM TrainingProgramme tp JOIN ProgrammeVersion pv ON pv.programme_id=tp.programme_id
+       WHERE tp.programme_id=$1 AND tp.admin_id=$2 AND pv.status='Draft'
+       ORDER BY pv.version_number DESC LIMIT 1 FOR UPDATE OF pv`,
+      [programmeId,req.user!.userId]
+    );
+    if (!draft.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Editable draft not found.' });
+    }
+    const programmeDeleted = !draft.rows[0].has_published;
+    if (programmeDeleted) await client.query('DELETE FROM TrainingProgramme WHERE programme_id=$1 AND admin_id=$2',[programmeId,req.user!.userId]);
+    else await client.query('DELETE FROM ProgrammeVersion WHERE version_id=$1',[draft.rows[0].version_id]);
+    await client.query('COMMIT');
+    return res.json({ message: 'Draft deleted.', programme_deleted: programmeDeleted });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Delete programme draft:', error);
+    return res.status(500).json({ error: 'Could not delete draft.' });
+  } finally {
+    client.release();
+  }
 });
 
 router.put('/:id/structure', requireRole('Admin'), async (req: AuthRequest, res: Response) => {
@@ -367,8 +417,10 @@ router.put('/logs/:id/sets/:prescriptionId/:setNumber', requireRole('Member'), a
       JOIN ExercisePrescription ep ON ep.session_id=sl.session_id
       WHERE sl.log_id=$1 AND pe.user_id=$2 AND ep.prescription_id=$3`,[logId,req.user!.userId,prescriptionId]);
     if (!target.rowCount) return res.status(404).json({ error: 'Prescribed set not found.' });
-    const index = target.rows[0].tracking_type === 'reps' ? 0 : target.rows[0].tracking_type === 'time' ? 2 : 3;
-    if (!(values[index] !== null && values[index] > 0)) return res.status(400).json({ error: 'Actual performance is required to complete a set.' });
+    const trackingType = target.rows[0].tracking_type;
+    const index = trackingType === 'reps' ? 0 : trackingType === 'time' ? 2 : 3;
+    const performanceIsValid = values[index] !== null && (trackingType === 'reps' ? values[index]! >= 0 : values[index]! > 0);
+    if (!performanceIsValid) return res.status(400).json({ error: 'Actual performance is required to complete a set.' });
   }
   const result=await query(
     `INSERT INTO WorkoutSetLog (log_id,prescription_id,set_number,actual_reps,actual_load_kg,duration_seconds,distance_meters,rpe,completed)

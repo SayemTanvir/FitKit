@@ -11,17 +11,17 @@ interface SidebarProps {
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/programmes', label: 'Explore Programmes', icon: Dumbbell, end: true },
-  { to: '/my-programmes', label: 'My Programmes', icon: Activity, end: false },
+  { to: '/my-programmes', label: 'My Programmes', icon: Activity, end: false, memberOnly: true },
   { to: '/exercise-library', label: 'Exercise Library', icon: Dumbbell, end: false, adminOnly: true },
-  { to: '/activity', label: 'Daily Activity Logs', icon: Activity, end: false },
-  { to: '/community', label: 'Community', icon: Users, end: true },
-  { to: '/community/people', label: 'Find Members', icon: Users, end: false },
-  { to: '/messages', label: 'Messages', icon: MessageCircle, end: false },
+  { to: '/activity', label: 'Daily Activity Logs', icon: Activity, end: false, memberOnly: true },
+  { to: '/community', label: 'Community', icon: Users, end: true, memberOnly: true },
+  { to: '/community/people', label: 'Find Members', icon: Users, end: false, memberOnly: true },
+  { to: '/messages', label: 'Messages', icon: MessageCircle, end: false, memberOnly: true },
   { to: '/notifications', label: 'Notifications', icon: Bell, end: false },
-  { to: '/community/settings', label: 'Community Privacy', icon: Shield, end: false },
+  { to: '/community/settings', label: 'Community Privacy', icon: Shield, end: false, memberOnly: true },
   { to: '/moderation', label: 'Moderation', icon: Shield, end: false, adminOnly: true },
   { to: '/leaderboard', label: 'Leaderboard', icon: Trophy, end: false },
-  { to: '/achievements', label: 'Achievements & Ranks', icon: Shield, end: false },
+  { to: '/achievements', label: 'Achievements & Ranks', icon: Shield, end: false, memberOnly: true },
   { to: '/settings', label: 'Settings', icon: Settings, end: false },
 ];
 
@@ -74,7 +74,10 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       {/* Nav */}
       <nav className="flex-1 px-4 space-y-1.5 mt-2 overflow-y-auto">
         <p className="px-3 text-[11px] uppercase tracking-widest text-slate-500 font-semibold mb-2">Menu</p>
-        {navItems.filter((item) => !('adminOnly' in item && item.adminOnly) || userRole === 'Admin').map(({ to, label, icon: Icon, end }) => (
+        {navItems.filter((item) =>
+          (!('adminOnly' in item) || !item.adminOnly || userRole === 'Admin') &&
+          (!('memberOnly' in item) || !item.memberOnly || userRole === 'Member')
+        ).map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}
