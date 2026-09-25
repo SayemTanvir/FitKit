@@ -81,7 +81,7 @@ export default function App() {
           <Route path="/my-programmes" element={<RequireRole role="Member"><MyProgrammes /></RequireRole>} />
           <Route path="/my-programmes/:enrollmentId" element={<RequireRole role="Member"><MyProgrammeSchedule /></RequireRole>} />
           <Route path="/my-programmes/:enrollmentId/sessions/:sessionId" element={<RequireRole role="Member"><ProgrammeWorkoutSession /></RequireRole>} />
-          <Route path="/exercise-library" element={<RequireRole role="Admin"><ExerciseLibrary /></RequireRole>} />
+          <Route path="/exercise-library" element={<ExerciseLibrary />} />
           <Route path="/community" element={<RequireRole role="Member"><CommunityFeed /></RequireRole>} />
           <Route path="/community/people" element={<RequireRole role="Member"><MemberDiscovery /></RequireRole>} />
           <Route path="/community/requests" element={<RequireRole role="Member"><CommunityRequests /></RequireRole>} />

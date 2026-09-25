@@ -101,7 +101,7 @@ router.get(['/', '/feed'], verifyToken, async (req: AuthRequest, res: Response) 
          mp.photo_url,
          af.message AS content,
          af.feed_type,
-         af.created_at AS timestamp,
+         (af.created_at AT TIME ZONE 'UTC') AS timestamp,
          to_char(af.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.US') AS cursor_created_at,
          COUNT(fr.user_id) FILTER (WHERE fr.reaction_type = 'Fire')::int AS fire_count,
          COUNT(fr.user_id) FILTER (WHERE fr.reaction_type = 'Flex')::int AS flex_count,
@@ -113,9 +113,12 @@ router.get(['/', '/feed'], verifyToken, async (req: AuthRequest, res: Response) 
        LEFT JOIN FeedReaction fr ON fr.feed_id = af.feed_id
        WHERE ($2::timestamp IS NULL OR af.created_at < $2::timestamp OR (af.created_at = $2::timestamp AND af.feed_id < $3::int))
          AND NOT EXISTS (SELECT 1 FROM UserBlock b WHERE (b.blocker_id=$1 AND b.blocked_id=af.user_id) OR (b.blocked_id=$1 AND b.blocker_id=af.user_id))
-         AND (af.user_id = $1 OR mp.is_private = FALSE
-          OR EXISTS (SELECT 1 FROM FollowRelationship f WHERE f.follower_id=$1 AND f.followed_id=af.user_id AND f.status='Accepted')
-          OR EXISTS (SELECT 1 FROM FriendRequest f WHERE ((f.requester_id=$1 AND f.recipient_id=af.user_id) OR (f.recipient_id=$1 AND f.requester_id=af.user_id)) AND f.status='Accepted'))
+         AND (af.user_id = $1 OR EXISTS (
+           SELECT 1 FROM FriendRequest f
+           WHERE ((f.requester_id=$1 AND f.recipient_id=af.user_id)
+               OR (f.recipient_id=$1 AND f.requester_id=af.user_id))
+             AND f.status='Accepted'
+         ))
        GROUP BY af.feed_id, u.name, mp.photo_url
        ORDER BY af.created_at DESC, af.feed_id DESC
        LIMIT $4`,

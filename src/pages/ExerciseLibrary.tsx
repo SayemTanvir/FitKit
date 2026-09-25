@@ -20,6 +20,7 @@ const textFields = [
 ] as const;
 
 export default function ExerciseLibrary() {
+  const isAdmin = JSON.parse(localStorage.getItem('user') || '{}').role === 'Admin';
   const [items, setItems] = useState<any[]>([]);
   const [form, setForm] = useState(blank);
   const [editing, setEditing] = useState<number | null>(null);
@@ -74,13 +75,13 @@ export default function ExerciseLibrary() {
   const shown = items.filter((item) => item.name.toLowerCase().includes(search.toLowerCase()) && (category === 'All' || item.category === category));
 
   return <div className="space-y-6">
-    <div className="glass rounded-2xl p-6"><h1 className="font-display text-2xl font-semibold text-white">Exercise Library</h1><p className="text-sm text-slate-400 mt-1">The library is the admin-approved catalogue used when building programmes. Define an exercise once, then reuse it across any number of weekly schedules.</p></div>
-    <section className="grid md:grid-cols-3 gap-3">
+    <div className="glass rounded-2xl p-6"><h1 className="font-display text-2xl font-semibold text-white">Exercise Library</h1><p className="text-sm text-slate-400 mt-1">{isAdmin ? 'The admin-approved catalogue used when building programmes. Define an exercise once, then reuse it across weekly schedules.' : 'Browse exercise techniques, equipment requirements and training details.'}</p></div>
+    {isAdmin && <section className="grid md:grid-cols-3 gap-3">
       <div className="glass rounded-2xl p-4"><p className="text-xs text-lime-300 font-semibold">1 · Define</p><p className="text-sm text-slate-300 mt-2">Add technique, muscles, equipment, difficulty, and how performance is measured.</p></div>
       <div className="glass rounded-2xl p-4"><p className="text-xs text-cyan-300 font-semibold">2 · Prescribe</p><p className="text-sm text-slate-300 mt-2">Programme Builder uses these entries to set reps/load, time, or distance targets.</p></div>
       <div className="glass rounded-2xl p-4"><p className="text-xs text-red-300 font-semibold">3 · Delete unused entries</p><p className="text-sm text-slate-300 mt-2">Unused exercises can be permanently deleted. Exercises referenced by plans or workout history are protected.</p></div>
-    </section>
-    <form onSubmit={submit} className="glass rounded-2xl p-6 space-y-4">
+    </section>}
+    {isAdmin && <form onSubmit={submit} className="glass rounded-2xl p-6 space-y-4">
       <div><h2 className="font-display text-lg font-semibold text-white">{editing ? 'Edit exercise' : 'New exercise'}</h2><p className="text-xs text-slate-500 mt-1">Track by controls what members record during a workout: reps and load, elapsed time, or distance.</p></div>
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {textFields.map(([field, label, hint]) => <label key={field} className="text-xs text-slate-400">{label}<input value={form[field]} placeholder={hint} onChange={(e) => setForm((previous) => ({ ...previous, [field]: e.target.value }))} className="input-pro mt-1" required={field === 'name' || field === 'target_muscle_group'} /></label>)}
@@ -93,11 +94,15 @@ export default function ExerciseLibrary() {
       <label className="block text-xs text-slate-400">Description<textarea value={form.description} onChange={(e) => setForm((previous) => ({ ...previous, description: e.target.value }))} className="input-pro mt-1 w-full min-h-16" /></label>
       <label className="block text-xs text-slate-400">Instructions, technique and safety<textarea value={form.instructions} onChange={(e) => setForm((previous) => ({ ...previous, instructions: e.target.value }))} className="input-pro mt-1 w-full min-h-20" /></label>
       <div className="flex gap-2"><button type="submit" disabled={busy || uploadBusy} className="btn-primary rounded-xl px-5 py-2.5 text-sm font-semibold disabled:opacity-50">{busy ? 'Saving...' : 'Save exercise'}</button>{editing && <button type="button" onClick={() => { setEditing(null); setForm(blank); }} className="rounded-xl border border-white/10 px-4 text-sm text-slate-300">Cancel</button>}</div>
-    </form>
+    </form>}
     <section className="glass rounded-2xl p-6">
       <div className="flex flex-wrap gap-3 mb-4"><input aria-label="Search exercises" placeholder="Search exercises" value={search} onChange={(e) => setSearch(e.target.value)} className="input-pro max-w-xs" /><select aria-label="Filter exercise category" value={category} onChange={(e) => setCategory(e.target.value)} className="input-pro max-w-xs"><option>All</option><option>Strength</option><option>Cardio</option><option>Flexibility</option></select></div>
       {error && <p className="text-red-300">{error}</p>}
-      <div className="grid md:grid-cols-2 gap-3">{shown.map((item) => <div key={item.exercise_id} className="rounded-xl border border-white/10 p-4"><div className="flex justify-between gap-2"><h3 className="text-sm font-semibold text-white">{item.name}</h3><span className="text-xs text-lime-300">Active</span></div><p className="text-xs text-slate-400 mt-1">{item.category} · {item.target_muscle_group} · {item.difficulty_level} · {item.tracking_type}</p><p className="text-xs text-slate-400 mt-2 line-clamp-2">{item.instructions}</p>{item.media_url && <StoredImage url={item.media_url} alt={`${item.name} demonstration`} className="max-h-36 rounded-lg mt-2 object-cover" />}<div className="flex gap-3 mt-3"><button type="button" onClick={() => edit(item)} className="text-xs text-cyan-300">Edit</button><button type="button" onClick={() => remove(item)} className="text-xs text-red-300">Delete</button></div></div>)}</div>
+      <div className="grid md:grid-cols-2 gap-3">{shown.map((item) => <article key={item.exercise_id} className="rounded-xl border border-white/10 p-4"><div className="flex justify-between gap-2"><h3 className="text-sm font-semibold text-white">{item.name}</h3><span className="text-xs text-lime-300">Active</span></div><p className="text-xs text-slate-400 mt-1">{item.category} · {item.target_muscle_group} · {item.difficulty_level} · {item.tracking_type}</p>{item.media_url && <StoredImage url={item.media_url} alt={`${item.name} demonstration`} className="max-h-36 rounded-lg mt-2 object-cover" />}<details className="mt-3"><summary className="cursor-pointer text-xs font-semibold text-cyan-300">View exercise details</summary><dl className="grid sm:grid-cols-2 gap-x-4 gap-y-2 mt-3 text-xs">{item.description && <Detail label="Description" value={item.description} />}{item.movement_pattern && <Detail label="Movement pattern" value={item.movement_pattern} />}{item.secondary_muscles?.length > 0 && <Detail label="Secondary muscles" value={item.secondary_muscles.join(', ')} />}{item.equipment_needed && <Detail label="Required equipment" value={item.equipment_needed} />}{item.optional_equipment && <Detail label="Optional equipment" value={item.optional_equipment} />}{item.mets_score && <Detail label="METs" value={String(item.mets_score)} />}{item.hold_type && <Detail label="Hold type" value={item.hold_type} />}{item.instructions && <Detail label="Instructions" value={item.instructions} />}</dl></details>{isAdmin && <div className="flex gap-3 mt-3"><button type="button" onClick={() => edit(item)} className="text-xs text-cyan-300">Edit</button><button type="button" onClick={() => remove(item)} className="text-xs text-red-300">Delete</button></div>}</article>)}</div>
     </section>
   </div>;
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return <div><dt className="text-slate-500">{label}</dt><dd className="text-slate-200 whitespace-pre-wrap">{value}</dd></div>;
 }

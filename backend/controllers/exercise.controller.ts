@@ -19,6 +19,9 @@ export async function getExercises(req: AuthRequest, res: Response) {
          e.tracking_type,
          e.media_url,
          e.is_active,
+         se.equipment_needed,
+         ce.mets_score,
+         fe.hold_type,
          CASE
            WHEN se.exercise_id IS NOT NULL THEN 'Strength'
            WHEN ce.exercise_id IS NOT NULL THEN 'Cardio'

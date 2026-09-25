@@ -20,9 +20,8 @@ const requiredDatabaseSetting = (name: string): string => {
   return value;
 };
 
-const databaseTimeZone = /^[A-Za-z_]+\/[A-Za-z_]+$/.test(process.env.APP_TIME_ZONE || '')
-  ? process.env.APP_TIME_ZONE!
-  : 'Asia/Dhaka';
+const databaseTimeZone = 'UTC';
+process.env.TZ = databaseTimeZone;
 
 const pool = new Pool({
   host: requiredDatabaseSetting('DB_HOST'),

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { BarChart3, Droplet, Flame, Footprints } from 'lucide-react';
 import type { WeeklyMetric } from '../types';
+import { formatBangladeshWeekday } from '../utils/time';
 
 type MetricKey = 'steps' | 'calories' | 'hydration';
 
@@ -62,7 +63,6 @@ export default function WeeklyAnalytics({ data }: { data: WeeklyMetric[] }) {
         {data.map((item) => {
           const value = Number(item[metric]);
           const height = value === 0 ? 3 : Math.max(8, Math.round((value / maximum) * 100));
-          const date = new Date(`${item.activity_date.slice(0, 10)}T00:00:00`);
           return (
             <div key={item.activity_date} className="flex-1 h-full flex flex-col justify-end items-center gap-2 group">
               <span className="text-[10px] text-slate-300 opacity-0 group-hover:opacity-100 transition whitespace-nowrap">
@@ -71,7 +71,7 @@ export default function WeeklyAnalytics({ data }: { data: WeeklyMetric[] }) {
               <div className="w-full max-w-10 h-32 flex items-end rounded-lg bg-white/[0.03] overflow-hidden">
                 <div className={`w-full rounded-lg bg-gradient-to-t ${config.color} transition-all duration-500`} style={{ height: `${height}%` }} />
               </div>
-              <span className="text-[10px] sm:text-xs text-slate-500">{date.toLocaleDateString(undefined, { weekday: 'short' })}</span>
+              <span className="text-[10px] sm:text-xs text-slate-500">{formatBangladeshWeekday(item.activity_date)}</span>
             </div>
           );
         })}

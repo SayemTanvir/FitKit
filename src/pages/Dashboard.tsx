@@ -8,6 +8,7 @@ import StatCard from '../components/StatCard';
 import WeeklyAnalytics from '../components/WeeklyAnalytics';
 import type { SocialActivity, WeeklyMetric } from '../types';
 import { fetchDailySummary, fetchSocialFeedPage, fetchWeeklyAnalytics, logHydration, logSteps } from '../services/api';
+import { formatBangladeshDateKey } from '../utils/time';
 
 function relativeTime(timestamp: string) {
   const minutes = Math.max(0, Math.floor((Date.now() - new Date(timestamp).getTime()) / 60000));
@@ -24,7 +25,7 @@ function initials(name: string) {
 
 function updateStreak() {
   const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const today = formatBangladeshDateKey(now);
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const storageKey = `fitkit_active_streak_${user.id || 'guest'}`;
   const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');

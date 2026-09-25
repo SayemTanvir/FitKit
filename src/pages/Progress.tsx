@@ -11,6 +11,7 @@ import {
 } from '../services/api';
 import { Flame, Trash2, CheckCircle, Droplet, Footprints } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { formatBangladeshDateTime } from '../utils/time';
 
 export default function Progress() {
   const user = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!) : null;
@@ -206,7 +207,7 @@ export default function Progress() {
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-slate-400">
-                      {log.formatted_time || (log.logged_at ? new Date(log.logged_at).toLocaleString() : 'Just now')}
+                      {log.formatted_time || (log.logged_at ? formatBangladeshDateTime(log.logged_at) : 'Just now')}
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <button
@@ -231,7 +232,7 @@ export default function Progress() {
             <div className="space-y-2 max-h-72 overflow-y-auto">
               {stepHistory.map((entry) => (
                 <div key={entry.step_entry_id} className="flex items-center gap-3 rounded-xl bg-white/[0.03] border border-white/10 p-3">
-                  <div className="flex-1"><p className="text-white text-sm font-semibold">+{Number(entry.steps_added).toLocaleString()} steps</p><p className="text-xs text-slate-500">{new Date(entry.logged_at).toLocaleString()} · {entry.calories_burned} kcal</p></div>
+                  <div className="flex-1"><p className="text-white text-sm font-semibold">+{Number(entry.steps_added).toLocaleString()} steps</p><p className="text-xs text-slate-500">{formatBangladeshDateTime(entry.logged_at)} · {entry.calories_burned} kcal</p></div>
                   <button type="button" onClick={() => handleDeleteStep(entry.step_entry_id)} aria-label="Delete step entry" className="p-2 text-slate-400 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
                 </div>
               ))}
@@ -244,7 +245,7 @@ export default function Progress() {
             <div className="space-y-2 max-h-72 overflow-y-auto">
               {hydrationHistory.map((entry) => (
                 <div key={entry.hydration_id} className="flex items-center gap-3 rounded-xl bg-white/[0.03] border border-white/10 p-3">
-                  <div className="flex-1"><p className="text-white text-sm font-semibold">+{Number(entry.amount_ml).toLocaleString()} ml</p><p className="text-xs text-slate-500">{new Date(entry.logged_at).toLocaleString()}</p></div>
+                  <div className="flex-1"><p className="text-white text-sm font-semibold">+{Number(entry.amount_ml).toLocaleString()} ml</p><p className="text-xs text-slate-500">{formatBangladeshDateTime(entry.logged_at)}</p></div>
                   <button type="button" onClick={() => handleDeleteHydration(entry.hydration_id)} aria-label="Delete hydration entry" className="p-2 text-slate-400 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
                 </div>
               ))}

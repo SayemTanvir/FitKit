@@ -13,7 +13,7 @@ const navItems = [
   { to: '/admin', label: 'Admin Access', icon: Shield, end: true, adminOnly: true },
   { to: '/programmes', label: 'Explore Programmes', icon: Dumbbell, end: true },
   { to: '/my-programmes', label: 'My Programmes', icon: Activity, end: false, memberOnly: true },
-  { to: '/exercise-library', label: 'Exercise Library', icon: Dumbbell, end: false, adminOnly: true },
+  { to: '/exercise-library', label: 'Exercise Library', icon: Dumbbell, end: false },
   { to: '/activity', label: 'Daily Activity Logs', icon: Activity, end: false, memberOnly: true },
   { to: '/community', label: 'Community', icon: Users, end: true, memberOnly: true },
   { to: '/community/people', label: 'Find Members', icon: Users, end: false, memberOnly: true },
