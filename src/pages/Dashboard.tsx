@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Check, Droplet, Flame, Footprints, Plus } from 'lucide-react';
 import CircularProgress from '../components/CircularProgress';
@@ -7,7 +7,7 @@ import SocialFeed from '../components/SocialFeed';
 import StatCard from '../components/StatCard';
 import WeeklyAnalytics from '../components/WeeklyAnalytics';
 import type { SocialActivity, WeeklyMetric } from '../types';
-import { fetchDailySummary, fetchSocialFeed, fetchWeeklyAnalytics, logHydration, logSteps } from '../services/api';
+import { fetchDailySummary, fetchSocialFeedPage, fetchWeeklyAnalytics, logHydration, logSteps } from '../services/api';
 
 function relativeTime(timestamp: string) {
   const minutes = Math.max(0, Math.floor((Date.now() - new Date(timestamp).getTime()) / 60000));
@@ -42,6 +42,22 @@ function updateStreak() {
 
 const gradients = ['from-emerald-400 to-cyan-500', 'from-lime-400 to-emerald-500', 'from-cyan-400 to-blue-500', 'from-purple-400 to-pink-500'];
 
+function socialActivity(item: any): SocialActivity {
+  const name = item.user_name || 'FitKit Member';
+  const palette = Number(item.user_id || 0) % gradients.length;
+  return {
+    id: String(item.feed_id), userId: Number(item.user_id), name,
+    message: item.content || 'Completed a workout', timeAgo: relativeTime(item.timestamp),
+    initials: initials(name), avatarGradient: gradients[palette], photoUrl: item.photo_url,
+    reactions: [
+      { emoji: '🔥', count: Number(item.fire_count || 0) },
+      { emoji: '💪', count: Number(item.flex_count || 0) },
+      { emoji: '👏', count: Number(item.clap_count || 0) },
+    ],
+    activeReaction: ({ Fire: '🔥', Flex: '💪', Clap: '👏' } as Record<string, string>)[item.my_reaction] || null,
+  };
+}
+
 export default function Dashboard() {
   const [isLoggingWater, setIsLoggingWater] = useState(false);
   const [isLoggingSteps, setIsLoggingSteps] = useState(false);
@@ -50,6 +66,12 @@ export default function Dashboard() {
     hydration: 0, hydrationGoal: 2800, streakDays: 1, streakBest: 1,
   });
   const [feedActivities, setFeedActivities] = useState<SocialActivity[]>([]);
+  const [feedLoading, setFeedLoading] = useState(true);
+  const [feedHasMore, setFeedHasMore] = useState(true);
+  const [feedError, setFeedError] = useState('');
+  const feedCursor = useRef<string | undefined>(undefined);
+  const feedLoadingRef = useRef(false);
+  const feedHasMoreRef = useRef(true);
   const [weeklyData, setWeeklyData] = useState<WeeklyMetric[]>([]);
   const [loadError, setLoadError] = useState('');
 
@@ -62,26 +84,31 @@ export default function Dashboard() {
     }));
   }, []);
   const loadAnalytics = useCallback(async () => setWeeklyData(await fetchWeeklyAnalytics(7)), []);
+  const loadFeed = useCallback(async () => {
+    if (feedLoadingRef.current || !feedHasMoreRef.current) return;
+    feedLoadingRef.current = true;
+    setFeedLoading(true);
+    setFeedError('');
+    try {
+      const page = await fetchSocialFeedPage(feedCursor.current);
+      setFeedActivities((previous) => [...previous, ...page.items.map(socialActivity)]);
+      feedCursor.current = page.nextCursor || undefined;
+      feedHasMoreRef.current = page.hasMore;
+      setFeedHasMore(page.hasMore);
+    } catch (error) {
+      setFeedError(error instanceof Error ? error.message : 'Could not load social activity');
+    } finally {
+      feedLoadingRef.current = false;
+      setFeedLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     setStats((previous) => ({ ...previous, ...updateStreak() }));
     loadSummary().catch((error) => setLoadError(error.message));
     loadAnalytics().catch((error) => setLoadError(error.message));
-    fetchSocialFeed().then((items) => setFeedActivities(items.slice(0, 12).map((item, index) => {
-      const name = item.user_name || 'FitKit Member';
-      return {
-        id: String(item.feed_id), userId: Number(item.user_id), name,
-        message: item.content || 'Completed a workout', timeAgo: relativeTime(item.timestamp),
-        initials: initials(name), avatarGradient: gradients[index % gradients.length], photoUrl: item.photo_url,
-        reactions: [
-          { emoji: '🔥', count: Number(item.fire_count || 0) },
-          { emoji: '💪', count: Number(item.flex_count || 0) },
-          { emoji: '👏', count: Number(item.clap_count || 0) },
-        ],
-        activeReaction: ({ Fire: '🔥', Flex: '💪', Clap: '👏' } as Record<string, string>)[item.my_reaction] || null,
-      };
-    }))).catch((error) => setLoadError(error.message));
-  }, [loadAnalytics, loadSummary]);
+    loadFeed();
+  }, [loadAnalytics, loadFeed, loadSummary]);
 
   const handleAddWater = async () => {
     setIsLoggingWater(true);
@@ -116,6 +143,6 @@ export default function Dashboard() {
       <StatCard><div className="flex items-center justify-between"><span>🔥</span><p className="text-[11px] uppercase text-slate-400">Active Streak</p></div><p className="font-mono-fk font-bold text-2xl text-white mt-3">{stats.streakDays} <span className="text-sm font-normal text-slate-400">Days</span></p><div className="flex gap-1 mt-3">{Array.from({ length: 7 }).map((_, index) => <span key={index} className={`flex-1 h-1.5 rounded-full ${index < Math.min(stats.streakDays, 7) ? 'bg-gradient-to-r from-lime-400 to-emerald-400' : 'bg-white/10'}`} />)}</div><p className="text-[11px] text-slate-400 mt-1.5">Personal best: {stats.streakBest} days</p></StatCard>
     </section>
     <WeeklyAnalytics data={weeklyData} />
-    <SocialFeed activities={feedActivities} />
+    <SocialFeed activities={feedActivities} loading={feedLoading} hasMore={feedHasMore} error={feedError} onLoadMore={loadFeed} />
   </div>;
 }

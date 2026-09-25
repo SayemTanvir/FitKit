@@ -139,13 +139,13 @@ router.get('/', async (req: AuthRequest, res: Response) => {
      FROM TrainingProgramme tp JOIN users u ON u.user_id = tp.admin_id
      JOIN LATERAL (
        SELECT * FROM ProgrammeVersion v WHERE v.programme_id = tp.programme_id
-         AND (CASE WHEN $2::boolean THEN TRUE ELSE v.status = 'Published' END)
+         AND (CASE WHEN $1::boolean THEN TRUE ELSE v.status = 'Published' END)
        ORDER BY (v.status = 'Draft') DESC, v.version_number DESC LIMIT 1
      ) pv ON TRUE
-     WHERE ($2::boolean OR tp.archived_at IS NULL) AND
-       (CASE WHEN $2::boolean THEN tp.admin_id = $1 ELSE tp.visibility = 'public' END)
+     WHERE ($1::boolean OR tp.archived_at IS NULL) AND
+      (CASE WHEN $1::boolean THEN TRUE ELSE tp.visibility = 'public' END)
      ORDER BY tp.updated_at DESC LIMIT 100`,
-    [req.user!.userId, mine]
+    [mine]
   );
   return res.json(result.rows);
 });
@@ -198,12 +198,12 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
   const requestedVersion = req.query.version ? Number(req.query.version) : undefined;
   let item = await loadProgramme(programmeId, requestedVersion);
   if (!item) return res.status(404).json({ error: 'Programme not found.' });
-  const owner = req.user!.role === 'Admin' && item.admin_id === req.user!.userId;
-  if (!owner && !requestedVersion && item.status === 'Draft') {
+  const admin = req.user!.role === 'Admin';
+  if (!admin && !requestedVersion && item.status === 'Draft') {
     const latest = await query(`SELECT version_id FROM ProgrammeVersion WHERE programme_id=$1 AND status='Published' ORDER BY version_number DESC LIMIT 1`,[programmeId]);
     item = latest.rowCount ? await loadProgramme(programmeId,latest.rows[0].version_id) : null;
   }
-  if (!owner && item) {
+  if (!admin && item) {
     const enrolled = await query('SELECT 1 FROM ProgrammeEnrollment WHERE user_id=$1 AND version_id=$2',[req.user!.userId,item.version_id]);
     if (!enrolled.rowCount && (item.status !== 'Published' || item.archived_at || item.visibility === 'unlisted')) item = null;
   }
@@ -216,10 +216,11 @@ router.put('/:id', requireRole('Admin'), async (req: AuthRequest, res: Response)
   const data = details(req.body);
   if (!Number.isInteger(programmeId) || 'error' in data) return res.status(400).json({ error: 'Invalid programme details.' });
   if(data.coverUrl?.startsWith('/api/community/media/')){
-    const owned=await query("SELECT 1 FROM MediaAsset WHERE media_id=$1 AND owner_id=$2 AND purpose='Programme'",[Number(data.coverUrl.split('/').at(-1)),req.user!.userId]);
+    const owned=await query(`SELECT 1 FROM MediaAsset ma WHERE ma.media_id=$1 AND ma.purpose='Programme'
+      AND (ma.owner_id=$2 OR EXISTS (SELECT 1 FROM TrainingProgramme tp WHERE tp.programme_id=$3 AND tp.cover_url=$4))`,[Number(data.coverUrl.split('/').at(-1)),req.user!.userId,programmeId,data.coverUrl]);
     if(!owned.rowCount)return res.status(403).json({error:'Cover image does not belong to you.'});
   }
-  const draft = await query(`SELECT pv.version_id,tp.duration_weeks FROM ProgrammeVersion pv JOIN TrainingProgramme tp ON tp.programme_id=pv.programme_id WHERE tp.programme_id=$1 AND tp.admin_id=$2 AND pv.status='Draft' ORDER BY pv.version_number DESC LIMIT 1`, [programmeId, req.user!.userId]);
+  const draft = await query(`SELECT pv.version_id,tp.duration_weeks FROM ProgrammeVersion pv JOIN TrainingProgramme tp ON tp.programme_id=pv.programme_id WHERE tp.programme_id=$1 AND pv.status='Draft' ORDER BY pv.version_number DESC LIMIT 1`, [programmeId]);
   if (!draft.rowCount) return res.status(409).json({ error: 'Create a new draft version before editing a published programme.' });
   const client = await pool.connect();
   try {
@@ -256,16 +257,16 @@ router.delete('/:id/draft', requireRole('Admin'), async (req: AuthRequest, res: 
       `SELECT pv.version_id,
               EXISTS (SELECT 1 FROM ProgrammeVersion published WHERE published.programme_id=tp.programme_id AND published.status='Published') AS has_published
        FROM TrainingProgramme tp JOIN ProgrammeVersion pv ON pv.programme_id=tp.programme_id
-       WHERE tp.programme_id=$1 AND tp.admin_id=$2 AND pv.status='Draft'
+       WHERE tp.programme_id=$1 AND pv.status='Draft'
        ORDER BY pv.version_number DESC LIMIT 1 FOR UPDATE OF pv`,
-      [programmeId,req.user!.userId]
+      [programmeId]
     );
     if (!draft.rowCount) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Editable draft not found.' });
     }
     const programmeDeleted = !draft.rows[0].has_published;
-    if (programmeDeleted) await client.query('DELETE FROM TrainingProgramme WHERE programme_id=$1 AND admin_id=$2',[programmeId,req.user!.userId]);
+    if (programmeDeleted) await client.query('DELETE FROM TrainingProgramme WHERE programme_id=$1',[programmeId]);
     else await client.query('DELETE FROM ProgrammeVersion WHERE version_id=$1',[draft.rows[0].version_id]);
     await client.query('COMMIT');
     return res.json({ message: 'Draft deleted.', programme_deleted: programmeDeleted });
@@ -284,7 +285,7 @@ router.delete('/:id', requireRole('Admin'), async (req: AuthRequest, res: Respon
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
-    const found=await client.query('SELECT programme_id FROM TrainingProgramme WHERE programme_id=$1 AND admin_id=$2 FOR UPDATE',[programmeId,req.user!.userId]);
+    const found=await client.query('SELECT programme_id FROM TrainingProgramme WHERE programme_id=$1 FOR UPDATE',[programmeId]);
     if(!found.rowCount){await client.query('ROLLBACK');return res.status(404).json({error:'Programme not found.'});}
     await client.query(`DELETE FROM ProgrammeEnrollment WHERE version_id IN
       (SELECT version_id FROM ProgrammeVersion WHERE programme_id=$1)`,[programmeId]);
@@ -296,7 +297,7 @@ router.delete('/:id', requireRole('Admin'), async (req: AuthRequest, res: Respon
 
 router.put('/:id/structure', requireRole('Admin'), async (req: AuthRequest, res: Response) => {
   const programmeId = Number(req.params.id);
-  const found = await query(`SELECT tp.duration_weeks,tp.days_per_week,tp.session_minutes,pv.version_id FROM TrainingProgramme tp JOIN ProgrammeVersion pv ON pv.programme_id=tp.programme_id WHERE tp.programme_id=$1 AND tp.admin_id=$2 AND pv.status='Draft' ORDER BY pv.version_number DESC LIMIT 1`, [programmeId,req.user!.userId]);
+  const found = await query(`SELECT tp.duration_weeks,tp.days_per_week,tp.session_minutes,pv.version_id FROM TrainingProgramme tp JOIN ProgrammeVersion pv ON pv.programme_id=tp.programme_id WHERE tp.programme_id=$1 AND pv.status='Draft' ORDER BY pv.version_number DESC LIMIT 1`, [programmeId]);
   if (!found.rowCount) return res.status(404).json({ error: 'Editable draft not found.' });
   const exercises = await query('SELECT exercise_id FROM Exercise WHERE is_active=TRUE');
   const error = validateWeeks(req.body?.weeks, found.rows[0].duration_weeks, found.rows[0].days_per_week, new Set(exercises.rows.map((row) => row.exercise_id)));
@@ -365,7 +366,7 @@ router.put('/:id/structure', requireRole('Admin'), async (req: AuthRequest, res:
 router.post('/:id/publish', requireRole('Admin'), async (req: AuthRequest, res: Response) => {
   const programmeId = Number(req.params.id);
   const item = await loadProgramme(programmeId);
-  if (!item || item.admin_id !== req.user!.userId || item.status !== 'Draft' || item.archived_at) return res.status(404).json({ error: 'Editable, unarchived draft not found.' });
+  if (req.user!.role !== 'Admin' || !item || item.status !== 'Draft' || item.archived_at) return res.status(404).json({ error: 'Editable, unarchived draft not found.' });
   const exercises = await query('SELECT exercise_id FROM Exercise WHERE is_active=TRUE');
   const error = validateWeeks(item.weeks, item.duration_weeks, item.days_per_week, new Set(exercises.rows.map((row) => row.exercise_id)), true);
   if (error) return res.status(400).json({ error });
@@ -381,8 +382,8 @@ router.patch('/:id/archive', requireRole('Admin'), async (req: AuthRequest, res:
   }
   const result = await query(
     `UPDATE TrainingProgramme SET archived_at=CASE WHEN $3::boolean THEN CURRENT_TIMESTAMP ELSE NULL END,
-       updated_at=CURRENT_TIMESTAMP WHERE programme_id=$1 AND admin_id=$2 RETURNING programme_id`,
-    [programmeId, req.user!.userId, req.body.archived]
+       updated_at=CURRENT_TIMESTAMP WHERE programme_id=$1 RETURNING programme_id`,
+    [programmeId, req.body.archived]
   );
   if (!result.rowCount) return res.status(404).json({ error: 'Programme not found.' });
   return res.json(await loadProgramme(programmeId));
@@ -390,8 +391,8 @@ router.patch('/:id/archive', requireRole('Admin'), async (req: AuthRequest, res:
 
 router.post('/:id/new-version', requireRole('Admin'), async (req: AuthRequest, res: Response) => {
   const programmeId = Number(req.params.id);
-  const source = await query(`SELECT tp.admin_id,pv.version_id,pv.version_number FROM TrainingProgramme tp JOIN ProgrammeVersion pv ON pv.programme_id=tp.programme_id WHERE tp.programme_id=$1 ORDER BY pv.version_number DESC LIMIT 1`, [programmeId]);
-  if (!source.rowCount || source.rows[0].admin_id !== req.user!.userId) return res.status(404).json({ error: 'Programme not found.' });
+  const source = await query(`SELECT pv.version_id,pv.version_number FROM TrainingProgramme tp JOIN ProgrammeVersion pv ON pv.programme_id=tp.programme_id WHERE tp.programme_id=$1 ORDER BY pv.version_number DESC LIMIT 1`, [programmeId]);
+  if (!source.rowCount) return res.status(404).json({ error: 'Programme not found.' });
   const existing = await query(`SELECT 1 FROM ProgrammeVersion WHERE programme_id=$1 AND status='Draft'`, [programmeId]);
   if (existing.rowCount) return res.status(409).json({ error: 'Finish the existing draft first.' });
   const original = await loadProgramme(programmeId, source.rows[0].version_id);
@@ -428,6 +429,31 @@ router.patch('/enrollments/:id', requireRole('Member'), async (req: AuthRequest,
   const result = await query(`UPDATE ProgrammeEnrollment SET status=$1 WHERE enrollment_id=$2 AND user_id=$3 AND status IN ('Active','Paused') RETURNING *`, [status,Number(req.params.id),req.user!.userId]);
   if (!result.rowCount) return res.status(404).json({ error: 'Enrollment not found.' });
   return res.json(result.rows[0]);
+});
+
+router.delete('/enrollments/:id', requireRole('Member'), async (req: AuthRequest, res: Response) => {
+  const enrollmentId = Number(req.params.id);
+  if (!Number.isInteger(enrollmentId) || enrollmentId < 1) return res.status(400).json({ error: 'Invalid enrollment ID.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      'DELETE FROM ProgrammeEnrollment WHERE enrollment_id=$1 AND user_id=$2 RETURNING enrollment_id',
+      [enrollmentId, req.user!.userId]
+    );
+    if (!result.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Enrollment not found.' });
+    }
+    await client.query('COMMIT');
+    return res.json({ message: 'Programme removed from your list.' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Remove programme enrollment:', error);
+    return res.status(500).json({ error: 'Could not remove programme.' });
+  } finally {
+    client.release();
+  }
 });
 
 router.post('/enrollments/:id/sessions/:sessionId', requireRole('Member'), async (req: AuthRequest, res: Response) => {

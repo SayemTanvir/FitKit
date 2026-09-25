@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { Virtuoso } from 'react-virtuoso';
 import toast from 'react-hot-toast';
 import type { SocialActivity } from '../types';
 import { reactToFeed } from '../services/api';
@@ -8,8 +9,24 @@ import UserAvatar from './UserAvatar';
 import ReactionBar from './ReactionBar';
 import { reactions, type ReactionType } from '../services/reactions';
 
-export default function SocialFeed({ activities }: { activities: SocialActivity[] }) {
-  return <div className="glass rounded-2xl p-6 flex flex-col"><div className="flex items-center justify-between mb-4"><div className="flex items-center gap-2"><Users className="w-4 h-4 text-lime-300" /><h2 className="font-display font-semibold text-lg text-white">Social Feed</h2></div><Link to="/community" className="text-xs font-semibold text-cyan-300 hover:text-cyan-200">Open community →</Link></div>{activities.length===0?<p className="text-sm text-slate-400 py-6">No visible activity yet.</p>:<div className="space-y-4 overflow-y-auto max-h-[640px] pr-1">{activities.map((activity)=><ActivityItem key={activity.id} activity={activity}/>)}</div>}</div>;
+export default function SocialFeed({ activities, loading = false, hasMore = false, error = '', onLoadMore = () => {} }: {
+  activities: SocialActivity[];
+  loading?: boolean;
+  hasMore?: boolean;
+  error?: string;
+  onLoadMore?: () => void;
+}) {
+  return <div className="glass rounded-2xl p-6 flex flex-col"><div className="flex items-center justify-between mb-4"><div className="flex items-center gap-2"><Users className="w-4 h-4 text-lime-300" /><h2 className="font-display font-semibold text-lg text-white">Social Feed</h2></div><Link to="/community" className="text-xs font-semibold text-cyan-300 hover:text-cyan-200">Open community →</Link></div>{activities.length===0&&!loading?(error?<div className="py-6"><p role="alert" className="text-sm text-red-300">{error}</p><button type="button" onClick={onLoadMore} className="text-xs text-cyan-300 mt-2">Retry</button></div>:<p className="text-sm text-slate-400 py-6">No visible activity yet.</p>):activities.length===0?<p className="text-sm text-slate-400 py-6">Loading activity...</p>:<Virtuoso
+    data={activities}
+    computeItemKey={(_, activity) => activity.id}
+    itemContent={(_, activity) => <ActivityItem activity={activity} />}
+    endReached={() => { if (hasMore && !loading && !error) onLoadMore(); }}
+    increaseViewportBy={{ top: 240, bottom: 480 }}
+    style={{ height: 'min(640px, 70vh)' }}
+    components={{
+      Footer: () => <div className="py-4 text-center text-xs text-slate-500">{error ? <button type="button" onClick={onLoadMore} className="text-cyan-300 hover:text-cyan-200">Could not load more activity. Retry</button> : loading ? 'Loading more activity...' : hasMore ? null : 'You are all caught up.'}</div>,
+    }}
+  />}</div>;
 }
 
 function ActivityItem({ activity }: { activity: SocialActivity }) {

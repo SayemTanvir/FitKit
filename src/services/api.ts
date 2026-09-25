@@ -68,6 +68,10 @@ export async function fetchMyProfile(userId?: string) {
   return request<any>(path, { headers: getAuthHeaders() });
 }
 
+export async function fetchCountries(): Promise<{ country_id: string; country_name: string }[]> {
+  return request('/auth/countries', { headers: getAuthHeaders() });
+}
+
 export async function updateMyProfile(profile: Record<string, unknown>) {
   return request<any>('/auth/me', {
     method: 'PUT',
@@ -180,8 +184,14 @@ export async function deleteWorkoutLog(entryId: number) {
   });
 }
 
+export async function fetchSocialFeedPage(cursor?: string, limit = 12) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set('cursor', cursor);
+  return request<{ items: any[]; nextCursor: string | null; hasMore: boolean }>(`/social/feed?${params}`, { headers: getAuthHeaders() });
+}
+
 export async function fetchSocialFeed() {
-  return request<any[]>('/social/feed', { headers: getAuthHeaders() });
+  return (await fetchSocialFeedPage()).items;
 }
 
 export async function fetchLeaderboard(filters: {
@@ -189,6 +199,7 @@ export async function fetchLeaderboard(filters: {
   period: 'today' | 'week' | 'month' | 'all';
   level: 'All' | 'Beginner' | 'Intermediate' | 'Advanced';
   scope: 'all' | 'friends';
+  country: string;
 }) {
   const params = new URLSearchParams(filters);
   return request<any[]>(`/social/leaderboard?${params}`, { headers: getAuthHeaders() });

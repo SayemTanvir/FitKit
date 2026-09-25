@@ -7,8 +7,20 @@ ALTER TABLE Exercise ADD COLUMN IF NOT EXISTS tracking_type VARCHAR(20) NOT NULL
 ALTER TABLE Exercise ADD COLUMN IF NOT EXISTS media_url TEXT;
 ALTER TABLE Exercise ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMP;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS country_id CHAR(2) REFERENCES Country(country_id) ON DELETE SET NULL;
 ALTER TABLE Admin ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE Admin ADD COLUMN IF NOT EXISTS can_manage_admins BOOLEAN NOT NULL DEFAULT FALSE;
+INSERT INTO Region (region_name) VALUES ('Asia'), ('Americas'), ('Europe')
+ON CONFLICT (region_name) DO NOTHING;
+INSERT INTO Country (country_id, country_name, region_id)
+SELECT defaults.country_id, defaults.country_name, region.region_id
+FROM (VALUES
+    ('BD', 'Bangladesh', 'Asia'),
+    ('US', 'United States', 'Americas'),
+    ('UK', 'United Kingdom', 'Europe')
+) AS defaults(country_id, country_name, region_name)
+JOIN Region region ON region.region_name = defaults.region_name
+ON CONFLICT (country_id) DO NOTHING;
 UPDATE Admin a SET is_active=TRUE, can_manage_admins=TRUE
 FROM users u WHERE u.user_id=a.user_id AND LOWER(u.email)='admin@fitkit.com';
 INSERT INTO Member (user_id)

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { Save, Target, UserRound } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { fetchMyProfile, updateMyProfile, setMyPhoto, removeMyPhoto } from '../services/api';
+import { fetchCountries, fetchMyProfile, updateMyProfile, setMyPhoto, removeMyPhoto } from '../services/api';
 import ImageUploadField from '../components/ImageUploadField';
 import UserAvatar from '../components/UserAvatar';
 
@@ -14,6 +14,7 @@ const emptyForm = {
   weight_kg: 70,
   fitness_level: 'Beginner',
   primary_goal: 'General Fitness',
+  country_id: '',
   daily_step_goal: 10000,
   daily_calorie_goal: 800,
   daily_hydration_goal: 2800,
@@ -30,12 +31,14 @@ const maxBirthDate = (() => {
 export default function Settings() {
   const [form, setForm] = useState<ProfileForm>(emptyForm);
   const [role, setRole] = useState('Member');
+  const [countries, setCountries] = useState<{ country_id: string; country_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [photoUrl,setPhotoUrl]=useState(''),[photoBusy,setPhotoBusy]=useState(false),[uploadBusy,setUploadBusy]=useState(false);
 
   useEffect(() => {
+    fetchCountries().then(setCountries).catch(() => setCountries([]));
     fetchMyProfile()
       .then((data) => {
         const user = data.user;
@@ -49,6 +52,7 @@ export default function Settings() {
           weight_kg: Number(user.weight_kg || 70),
           fitness_level: user.fitness_level || 'Beginner',
           primary_goal: user.primary_goal || 'General Fitness',
+          country_id: user.country_id || '',
           daily_step_goal: Number(user.daily_step_goal || 10000),
           daily_calorie_goal: Number(user.daily_calorie_goal || 800),
           daily_hydration_goal: Number(user.daily_hydration_goal || 2800),
@@ -121,6 +125,7 @@ export default function Settings() {
           <Field label="Height (cm)"><input type="number" min="1" value={form.height_cm} onChange={(e) => updateNumberField('height_cm', e.target.value)} required className="input-pro" /></Field>
           <Field label="Weight (kg)"><input type="number" min="1" step="0.1" value={form.weight_kg} onChange={(e) => updateNumberField('weight_kg', e.target.value)} required className="input-pro" /></Field>
           <Field label="Primary goal"><select value={form.primary_goal} onChange={(e) => updateField('primary_goal', e.target.value)} className="input-pro"><option>General Fitness</option><option>Weight Loss</option><option>Muscle Gain</option><option>Strength</option><option>Flexibility</option></select></Field>
+          <Field label="Country (optional)"><select value={form.country_id} onChange={(e) => updateField('country_id', e.target.value)} className="input-pro"><option value="">Not set</option>{countries.map((country) => <option key={country.country_id} value={country.country_id}>{country.country_name}</option>)}</select></Field>
         </div>
       </div>
 

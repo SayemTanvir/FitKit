@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Flame, Footprints, Medal, Trophy } from 'lucide-react';
-import { fetchLeaderboard } from '../services/api';
+import { fetchCountries, fetchLeaderboard } from '../services/api';
 import UserAvatar from '../components/UserAvatar';
 
 type Metric = 'steps' | 'calories' | 'workouts';
@@ -14,6 +14,7 @@ interface Entry {
   name: string;
   photo_url?: string | null;
   fitness_level: string | null;
+  country_name: string | null;
   score: number | string;
   rank: number;
 }
@@ -26,19 +27,25 @@ export default function LeaderboardPage() {
   const [period, setPeriod] = useState<Period>('week');
   const [level, setLevel] = useState<Level>('All');
   const [scope, setScope] = useState<Scope>('all');
+  const [country, setCountry] = useState('');
+  const [countries, setCountries] = useState<{ country_id: string; country_name: string }[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const currentUserId = Number(JSON.parse(localStorage.getItem('user') || '{}').id);
 
   useEffect(() => {
+    fetchCountries().then(setCountries).catch(() => setCountries([]));
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
-    fetchLeaderboard({ metric, period, level, scope })
+    fetchLeaderboard({ metric, period, level, scope, country })
       .then((data) => { if (!cancelled) { setEntries(data); setError(''); } })
       .catch((requestError) => { if (!cancelled) setError(requestError.message || 'Could not load leaderboard'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [metric, period, level, scope]);
+  }, [metric, period, level, scope, country]);
 
   const updateMetric = (value: Metric) => { setLoading(true); setMetric(value); };
   const updatePeriod = (value: Period) => { setLoading(true); setPeriod(value); };
@@ -51,7 +58,7 @@ export default function LeaderboardPage() {
         <p className="text-sm text-slate-400 mt-2">Compare member activity using public logs only. Private workouts and steps never count here.</p>
       </div>
 
-      <div className="glass rounded-2xl p-5 grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="glass rounded-2xl p-5 grid sm:grid-cols-2 xl:grid-cols-5 gap-4">
         <label className="text-xs font-semibold text-slate-400">People
           <select value={scope} onChange={(event) => { setLoading(true); setScope(event.target.value as Scope); }} className="input-pro mt-1.5">
             <option value="all">All members</option><option value="friends">My friends + me</option>
@@ -72,6 +79,11 @@ export default function LeaderboardPage() {
             <option>All</option><option>Beginner</option><option>Intermediate</option><option>Advanced</option>
           </select>
         </label>
+        <label className="text-xs font-semibold text-slate-400">Country
+          <select value={country} onChange={(event) => { setLoading(true); setCountry(event.target.value); }} className="input-pro mt-1.5">
+            <option value="">All countries</option>{countries.map((item) => <option key={item.country_id} value={item.country_id}>{item.country_name}</option>)}
+          </select>
+        </label>
       </div>
 
       <div className="glass rounded-2xl p-5 sm:p-6">
@@ -89,7 +101,7 @@ export default function LeaderboardPage() {
               <div key={entry.user_id} className={`flex items-center gap-4 rounded-xl border px-4 py-3 ${entry.user_id === currentUserId ? 'border-lime-400/35 bg-lime-400/10' : 'border-white/10 bg-white/[0.03]'}`}>
                 <span className="w-9 text-center font-mono-fk font-bold text-lime-300">#{entry.rank}</span>
                 <UserAvatar name={entry.name} photoUrl={entry.photo_url} className="w-9 h-9" />
-                <div className="flex-1 min-w-0"><Link to={`/profile/${entry.user_id}`} className="text-sm font-semibold text-white hover:text-lime-300">{entry.name}</Link><p className="text-xs text-slate-400">{entry.fitness_level || 'Level not set'}{entry.user_id === currentUserId ? ' · You' : ''}</p></div>
+                <div className="flex-1 min-w-0"><Link to={`/profile/${entry.user_id}`} className="text-sm font-semibold text-white hover:text-lime-300">{entry.name}</Link><p className="text-xs text-slate-400">{entry.fitness_level || 'Level not set'}{entry.country_name ? ` · ${entry.country_name}` : ''}{entry.user_id === currentUserId ? ' · You' : ''}</p></div>
                 <span className="font-mono-fk text-sm font-semibold text-white whitespace-nowrap">{Number(entry.score).toLocaleString()} <span className="text-xs font-normal text-slate-400">{metricUnits[metric]}</span></span>
               </div>
             ))}

@@ -29,6 +29,8 @@ try {
   await pool.query(sql);
   const platform = await readFile(new URL('../database/platform.sql', import.meta.url), 'utf8');
   await pool.query(platform);
+  const procedures = await readFile(new URL('../database/procedures.sql', import.meta.url), 'utf8');
+  await pool.query(procedures);
   console.log('FitKit compatibility migration complete.');
 } finally {
   await pool.end();

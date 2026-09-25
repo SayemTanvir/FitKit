@@ -10,6 +10,11 @@ import { query } from '../db';
 
 const router = Router();
 
+router.get('/countries', verifyToken, async (_req: AuthRequest, res: Response) => {
+  const result = await query('SELECT country_id, country_name FROM Country ORDER BY country_name');
+  return res.json(result.rows);
+});
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function normalizedEmail(value: unknown) {
@@ -156,6 +161,7 @@ router.get('/profile/:id', verifyToken, async (req: AuthRequest, res: Response) 
         role: user.role,
         fitness_level: user.fitness_level,
         primary_goal: user.primary_goal,
+        country_name: user.country_name,
         membership_rank: user.membership_rank,
         membership_months: user.membership_months,
       },
@@ -176,6 +182,7 @@ router.put('/me', verifyToken, async (req: AuthRequest, res: Response) => {
     weight_kg,
     fitness_level,
     primary_goal,
+    country_id,
     daily_step_goal,
     daily_calorie_goal,
     daily_hydration_goal,
@@ -188,12 +195,17 @@ router.put('/me', verifyToken, async (req: AuthRequest, res: Response) => {
     [daily_step_goal, daily_calorie_goal, daily_hydration_goal].every(
       (value) => Number.isInteger(Number(value)) && Number(value) > 0
     );
+  const countryId = String(country_id || '').trim().toUpperCase() || null;
 
-  if (!String(name || '').trim() || !isValidBirthDate(birth_date) || !validGender || !validLevel || !positiveNumbers || !validMemberGoals) {
+  if (!String(name || '').trim() || !isValidBirthDate(birth_date) || !validGender || !validLevel || !positiveNumbers || !validMemberGoals || (countryId && !/^[A-Z]{2}$/.test(countryId))) {
     return res.status(400).json({ error: 'Invalid profile, birth date (age 16+), or goal values.' });
   }
 
   try {
+    if (countryId) {
+      const country = await query('SELECT 1 FROM Country WHERE country_id=$1', [countryId]);
+      if (!country.rowCount) return res.status(400).json({ error: 'Choose a country from the list.' });
+    }
     const profile = await updateUserProfileService(req.user!.userId, req.user!.role, {
       name: String(name).trim(),
       gender,
@@ -202,6 +214,7 @@ router.put('/me', verifyToken, async (req: AuthRequest, res: Response) => {
       weight_kg: Number(weight_kg),
       fitness_level,
       primary_goal: String(primary_goal || 'General Fitness'),
+      country_id: countryId,
       daily_step_goal: Number(daily_step_goal),
       daily_calorie_goal: Number(daily_calorie_goal),
       daily_hydration_goal: Number(daily_hydration_goal),

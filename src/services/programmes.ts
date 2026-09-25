@@ -102,6 +102,7 @@ export const deleteProgrammeDraft = (id: number) => call<{ message: string; prog
 export const enrollProgramme = (id: number) => call<any>(`/${id}/enroll`, 'POST');
 export const myEnrollments = () => call<Enrollment[]>('/enrollments');
 export const setEnrollmentStatus = (id: number, status: 'Active' | 'Paused') => call<Enrollment>(`/enrollments/${id}`, 'PATCH', { status });
+export const removeEnrollment = (id: number) => call<{ message: string }>(`/enrollments/${id}`, 'DELETE');
 export const startProgrammeSession = (enrollmentId: number, sessionId: number) => call<any>(`/enrollments/${enrollmentId}/sessions/${sessionId}`, 'POST');
 export const enrollmentLogs = (id: number) => call<any[]>(`/enrollments/${id}/logs`);
 export const saveWorkoutSet = (logId: number, prescriptionId: number, setNumber: number, values: unknown) => call<any>(`/logs/${logId}/sets/${prescriptionId}/${setNumber}`, 'PUT', values);

@@ -49,6 +49,7 @@ CREATE TABLE users (
             fitness_level IN ('Beginner', 'Intermediate', 'Advanced')
         ),
     primary_goal VARCHAR(50),
+    country_id CHAR(2),
     default_privacy VARCHAR(20) NOT NULL DEFAULT 'Private'
         CHECK (
             default_privacy IN ('Public', 'Friends', 'Private')
@@ -62,6 +63,10 @@ CREATE TABLE users (
     CONSTRAINT fk_user_address
         FOREIGN KEY (address_id)
         REFERENCES Address(address_id)
+        ON DELETE SET NULL,
+    CONSTRAINT fk_user_country
+        FOREIGN KEY (country_id)
+        REFERENCES Country(country_id)
         ON DELETE SET NULL
 );
 

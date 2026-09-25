@@ -28,6 +28,7 @@ interface UpdateProfileDTO {
   weight_kg: number;
   fitness_level: 'Beginner' | 'Intermediate' | 'Advanced';
   primary_goal: string;
+  country_id?: string | null;
   daily_step_goal?: number;
   daily_calorie_goal?: number;
   daily_hydration_goal?: number;
@@ -41,39 +42,24 @@ export async function registerMemberService(data: RegisterMemberDTO) {
   try {
     await client.query('BEGIN');
 
-    // 1. Insert into superclass users table
-    const userInsertQuery = `
-      INSERT INTO users (
-        name, email, password_hash, gender, birth_date,
-        height_cm, weight_kg, fitness_level, primary_goal
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING user_id, name, email;
-    `;
-    const userRes = await client.query(userInsertQuery, [
-      data.name,
-      data.email,
-      passwordHash,
-      data.gender,
-      data.birth_date,
-      data.height_cm,
-      data.weight_kg,
-      data.fitness_level,
-      data.primary_goal || 'General Fitness',
-    ]);
-
+    const registered = await client.query(
+      `CALL register_member($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NULL)`,
+      [
+        data.name,
+        data.email,
+        passwordHash,
+        data.gender,
+        data.birth_date,
+        data.height_cm,
+        data.weight_kg,
+        data.fitness_level,
+        data.primary_goal || 'General Fitness',
+        data.daily_step_goal || 10000,
+      ]
+    );
+    const userId = registered.rows[0].p_user_id;
+    const userRes = await client.query('SELECT user_id, name, email FROM users WHERE user_id=$1', [userId]);
     const newUser = userRes.rows[0];
-
-    // 2. Insert into Member subclass table
-    const memberInsertQuery = `
-      INSERT INTO Member (user_id, daily_step_goal)
-      VALUES ($1, $2);
-    `;
-    await client.query(memberInsertQuery, [
-      newUser.user_id,
-      data.daily_step_goal || 10000,
-    ]);
-    await client.query('INSERT INTO MemberProfile (user_id,username) VALUES ($1,$2)', [newUser.user_id, `member${newUser.user_id}`]);
 
     await client.query('COMMIT');
 
@@ -180,6 +166,8 @@ export async function getUserProfileService(userId: number) {
        u.weight_kg,
        u.fitness_level,
        u.primary_goal,
+        u.country_id,
+        c.country_name,
        u.created_at,
        m.daily_step_goal,
        m.daily_calorie_goal,
@@ -202,6 +190,7 @@ export async function getUserProfileService(userId: number) {
          LIMIT 1
        ) AS active_plan
      FROM users u
+      LEFT JOIN Country c ON c.country_id = u.country_id
      LEFT JOIN Admin a ON a.user_id = u.user_id AND a.is_active=TRUE
      LEFT JOIN Member m ON m.user_id = u.user_id
      LEFT JOIN MemberProfile mp ON mp.user_id = u.user_id
@@ -252,8 +241,9 @@ export async function updateUserProfileService(
          height_cm = $4,
          weight_kg = $5,
          fitness_level = $6,
-         primary_goal = $7
-     WHERE user_id = $8`,
+         primary_goal = $7,
+         country_id = $8
+       WHERE user_id = $9`,
     [
       data.name,
       data.gender,
@@ -262,6 +252,7 @@ export async function updateUserProfileService(
       data.weight_kg,
       data.fitness_level,
       data.primary_goal,
+      data.country_id || null,
       userId,
     ]
   );

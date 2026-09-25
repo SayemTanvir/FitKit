@@ -51,6 +51,7 @@ export default function Profile() {
       <div className="glass rounded-2xl p-8">
         <div className="flex items-center gap-3 mb-2"><UserAvatar name={profile.name} photoUrl={profile.photo_url} className="w-14 h-14"/><h1 className="font-display font-semibold text-2xl text-white">{profile.name}</h1></div>
         <p className="text-slate-400 text-sm">{profile.role}{profile.email ? ` · ${profile.email}` : ''}</p>
+        {profile.country_name && <p className="text-slate-400 text-sm mt-1">{profile.country_name}</p>}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 text-sm">
           <div className="rounded-xl bg-white/5 p-3"><p className="text-slate-500 text-xs">Fitness level</p><p className="text-white mt-1">{profile.fitness_level || 'Not set'}</p></div>
           <div className="rounded-xl bg-white/5 p-3"><p className="text-slate-500 text-xs">Primary goal</p><p className="text-white mt-1">{profile.primary_goal || 'Not set'}</p></div>
