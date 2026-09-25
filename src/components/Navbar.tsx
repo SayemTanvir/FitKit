@@ -1,7 +1,7 @@
 import { useCallback, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, Bell, LogOut } from 'lucide-react';
-import { notifications as fetchCommunityNotifications } from '../services/community';
+import { Menu, Bell, LogOut, Trash2 } from 'lucide-react';
+import { deleteNotification, notifications as fetchCommunityNotifications, readNotification } from '../services/community';
 import UserAvatar from './UserAvatar';
 
 interface NavbarProps {
@@ -22,11 +22,15 @@ function readStoredUser() {
 export default function Navbar({ onMenuClick }: NavbarProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [databaseUnread, setDatabaseUnread] = useState(0);
+  const [notificationItems, setNotificationItems] = useState<any[]>([]);
   const navigate = useNavigate();
   const [user, setUser] = useState(readStoredUser());
   const refreshNotifications = useCallback(() => {
     fetchCommunityNotifications()
-      .then((items) => setDatabaseUnread(items.filter((item) => !item.is_read).length))
+      .then((items) => {
+        setNotificationItems(items);
+        setDatabaseUnread(items.filter((item) => !item.is_read).length);
+      })
       .catch(() => {});
   }, []);
 
@@ -55,6 +59,24 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     navigate('/login');
+  };
+
+  const openNotification = async (item: any) => {
+    setShowNotifications(false);
+    if (!item.is_read) {
+      setNotificationItems((current) => current.map((entry) => entry.notification_id === item.notification_id ? { ...entry, is_read: true } : entry));
+      setDatabaseUnread((count) => Math.max(0, count - 1));
+      readNotification(item.notification_id).catch(refreshNotifications);
+    }
+    navigate(item.link_path?.startsWith('/') ? item.link_path : '/notifications');
+  };
+
+  const removeNotification = async (event: React.MouseEvent, id: number) => {
+    event.stopPropagation();
+    const existing = notificationItems.find((item) => item.notification_id === id);
+    setNotificationItems((current) => current.filter((item) => item.notification_id !== id));
+    if (existing && !existing.is_read) setDatabaseUnread((count) => Math.max(0, count - 1));
+    try { await deleteNotification(id); } catch { refreshNotifications(); }
   };
 
   return (
@@ -112,10 +134,19 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
                   <p className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Notifications</p>
                 </div>
                 <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+                  {notificationItems.slice(0, 6).map((item) => (
+                    <div key={item.notification_id} className={`flex items-start rounded-xl ${item.is_read ? 'bg-white/[0.03]' : 'bg-cyan-500/10'}`}>
+                      <button type="button" onClick={() => openNotification(item)} className="min-w-0 flex-1 text-left px-3 py-2.5">
+                        <p className="text-xs font-semibold text-white truncate">{item.title}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">{item.message}</p>
+                      </button>
+                      <button type="button" onClick={(event) => removeNotification(event, item.notification_id)} aria-label={`Delete ${item.title}`} className="p-2.5 text-slate-500 hover:text-red-300"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  ))}
+                  {!notificationItems.length && <p className="text-xs text-slate-500 text-center py-4">No notifications.</p>}
                   <button type="button" onClick={() => { setShowNotifications(false); navigate('/notifications'); }} className="w-full text-left px-3 py-2 rounded-xl bg-cyan-500/10 text-cyan-200 text-xs font-semibold">
-                    Open notification centre {databaseUnread > 0 ? `(${databaseUnread} unread)` : ''}
+                    View all notifications {databaseUnread > 0 ? `(${databaseUnread} unread)` : ''}
                   </button>
-                  <p className="text-xs text-slate-500 text-center py-4">{databaseUnread > 0 ? 'Open the centre to review your unread items.' : 'No unread notifications.'}</p>
                 </div>
               </div>
             )}

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Dumbbell, Plus, CalendarDays } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { enrollProgramme, getProgramme, listProgrammes, myEnrollments, setEnrollmentStatus, setProgrammeArchived } from '../services/programmes';
+import { deleteProgramme, enrollProgramme, getProgramme, listProgrammes, myEnrollments, setEnrollmentStatus } from '../services/programmes';
 import type { Enrollment, Programme } from '../services/programmes';
 import UserAvatar, { StoredImage } from '../components/UserAvatar';
 
@@ -19,11 +19,12 @@ export function ProgrammeCatalog() {
   useEffect(() => { listProgrammes(admin).then(setItems).catch((e) => setError(e.message)).finally(() => setLoading(false)); }, [admin]);
   const visible = items.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()) && (goal === 'All' || p.goal === goal) && (difficulty === 'All' || p.difficulty === difficulty));
   const goals = [...new Set(items.map((p) => p.goal))];
-  const archive = async (p: Programme) => {
+  const remove = async (p: Programme) => {
+    if (!window.confirm(`Permanently delete “${p.name}”? Its member enrollments and workout progress will also be deleted. This cannot be undone.`)) return;
     try {
-      await setProgrammeArchived(p.programme_id, !p.archived_at);
-      setItems((previous) => previous.map((item) => item.programme_id === p.programme_id ? { ...item, archived_at: p.archived_at ? null : new Date().toISOString() } : item));
-      toast.success(p.archived_at ? 'Programme restored' : 'Programme archived');
+      await deleteProgramme(p.programme_id);
+      setItems((previous) => previous.filter((item) => item.programme_id !== p.programme_id));
+      toast.success('Programme deleted');
     } catch (e: any) { toast.error(e.message); }
   };
   return <div className="space-y-6">
@@ -31,7 +32,7 @@ export function ProgrammeCatalog() {
     <div className="glass rounded-2xl p-4 grid sm:grid-cols-3 gap-3"><input aria-label="Search programmes" placeholder="Search programmes" value={search} onChange={(e)=>setSearch(e.target.value)} className="input-pro" /><select aria-label="Filter by goal" value={goal} onChange={(e)=>setGoal(e.target.value)} className="input-pro"><option>All</option>{goals.map((value)=><option key={value}>{value}</option>)}</select><select aria-label="Filter by difficulty" value={difficulty} onChange={(e)=>setDifficulty(e.target.value)} className="input-pro"><option>All</option><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select></div>
     {loading && <p className="text-slate-400">Loading programmes...</p>}{error && <p role="alert" className="text-red-300">{error}</p>}
     {!loading && !error && !visible.length && <p className="glass rounded-2xl p-6 text-slate-400">No programmes match these filters.</p>}
-    <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{visible.map((p)=><article key={p.programme_id} className="glass rounded-2xl overflow-hidden"><div className="h-28 bg-gradient-to-br from-lime-400/25 to-cyan-500/10 flex items-center justify-center">{p.cover_url ? <StoredImage url={p.cover_url} alt="" className="w-full h-full object-cover" /> : <Dumbbell className="w-10 h-10 text-lime-300" />}</div><div className="p-5 space-y-2"><div className="flex justify-between gap-2"><h2 className="font-display font-semibold text-white">{p.name}</h2><span className="text-xs text-lime-300">{p.archived_at ? 'Archived' : p.status}</span></div><p className="text-xs text-slate-400 line-clamp-2">{p.description}</p><p className="text-xs text-slate-400">{p.goal} · {p.difficulty} · {p.duration_weeks} weeks · {p.days_per_week} days/week</p><p className="text-xs text-slate-500 flex items-center gap-2"><UserAvatar name={p.creator_name} photoUrl={p.creator_photo_url} className="w-6 h-6"/>By {p.creator_name}</p><Link to={admin ? `/programmes/${p.programme_id}/edit` : `/programmes/${p.programme_id}`} className="inline-block text-sm font-semibold text-cyan-300 hover:text-cyan-200 mt-2">{admin ? 'Open builder' : 'View full schedule'} →</Link>{admin && <button type="button" onClick={()=>archive(p)} className="block text-xs text-amber-200 mt-3">{p.archived_at ? 'Restore programme' : 'Archive programme'}</button>}</div></article>)}</div>
+    <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{visible.map((p)=><article key={p.programme_id} className="glass rounded-2xl overflow-hidden"><div className="h-28 bg-gradient-to-br from-lime-400/25 to-cyan-500/10 flex items-center justify-center">{p.cover_url ? <StoredImage url={p.cover_url} alt="" className="w-full h-full object-cover" /> : <Dumbbell className="w-10 h-10 text-lime-300" />}</div><div className="p-5 space-y-2"><div className="flex justify-between gap-2"><h2 className="font-display font-semibold text-white">{p.name}</h2><span className="text-xs text-lime-300">{p.status}</span></div><p className="text-xs text-slate-400 line-clamp-2">{p.description}</p><p className="text-xs text-slate-400">{p.goal} · {p.difficulty} · {p.duration_weeks} weeks · {p.days_per_week} days/week</p><p className="text-xs text-slate-500 flex items-center gap-2"><UserAvatar name={p.creator_name} photoUrl={p.creator_photo_url} className="w-6 h-6"/>By {p.creator_name}</p><Link to={admin ? `/programmes/${p.programme_id}/edit` : `/programmes/${p.programme_id}`} className="inline-block text-sm font-semibold text-cyan-300 hover:text-cyan-200 mt-2">{admin ? 'Open builder' : 'View full schedule'} →</Link>{admin && <button type="button" onClick={()=>remove(p)} className="block text-xs text-red-300 mt-3">Delete programme</button>}</div></article>)}</div>
   </div>;
 }
 

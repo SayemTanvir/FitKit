@@ -18,6 +18,7 @@ const pool = new pg.Pool({
   database: requiredDatabaseSetting('DB_NAME'),
   user: requiredDatabaseSetting('DB_USER'),
   password: requiredDatabaseSetting('DB_PASSWORD'),
+  options: `-c timezone=${process.env.APP_TIME_ZONE || 'Asia/Dhaka'}`,
   ssl: process.env.DB_SSL === 'true'
     ? { rejectUnauthorized: false }
     : undefined,

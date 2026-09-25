@@ -1,6 +1,6 @@
 import { Router, Response, raw } from 'express';
 import pool, { query } from '../db';
-import { AuthRequest, requireRole, verifyToken } from '../middleware/auth.middleware';
+import { AuthRequest, clearAccountStateCache, requireRole, verifyToken } from '../middleware/auth.middleware';
 import { reactionTypes, toggleReaction } from '../services/reactions';
 
 const router = Router();
@@ -282,7 +282,22 @@ router.get('/conversations', member, async (req: AuthRequest,res: Response)=>{
     ORDER BY other_id,m.created_at DESC`,[req.user!.userId]);return res.json(result.rows.sort((a,b)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime()));
 });
 router.get('/messages/:id', member, async (req: AuthRequest,res: Response)=>{const id=integer(req.params.id),self=req.user!.userId;if(!id||await blocked(self,id))return res.status(404).json({error:'Conversation not found.'});const before=integer(req.query.before),result=await query(`SELECT message_id,sender_id,recipient_id,body,created_at,read_at FROM DirectMessage WHERE ((sender_id=$1 AND recipient_id=$2) OR (sender_id=$2 AND recipient_id=$1)) AND ($3::int IS NULL OR message_id<$3) ORDER BY message_id DESC LIMIT 50`,[self,id,before]);await query('UPDATE DirectMessage SET read_at=CURRENT_TIMESTAMP WHERE sender_id=$1 AND recipient_id=$2 AND read_at IS NULL',[id,self]);return res.json(result.rows.reverse());});
-router.post('/messages/:id', member, async (req: AuthRequest,res: Response)=>{const id=integer(req.params.id),self=req.user!.userId,body=String(req.body?.body||'').trim();if(!id||id===self||!body||body.length>4000)return res.status(400).json({error:'Invalid recipient or message.'});if(!rate(self,'message',30))return res.status(429).json({error:'Messaging too quickly.'});if(await blocked(self,id))return res.status(403).json({error:'Messaging unavailable.'});const rel=await relation(self,id);if(!rel)return res.status(404).json({error:'Member not found.'});if(rel.dm_policy==='None'||rel.dm_policy==='Friends'&&rel.friendship!=='Accepted')return res.status(403).json({error:'This member accepts messages from friends only.'});const result=await query('INSERT INTO DirectMessage (sender_id,recipient_id,body) VALUES ($1,$2,$3) RETURNING *',[self,id,body]);await notify(id,'New message','You have a new message.',`/messages/${self}`);return res.status(201).json(result.rows[0]);});
+router.post('/messages/:id', member, async (req: AuthRequest,res: Response)=>{
+  const id=integer(req.params.id),self=req.user!.userId,body=String(req.body?.body||'').trim();
+  if(!id||id===self||!body||body.length>4000)return res.status(400).json({error:'Invalid recipient or message.'});
+  if(!rate(self,'message',30))return res.status(429).json({error:'Messaging too quickly.'});
+  if(await blocked(self,id))return res.status(403).json({error:'Messaging unavailable.'});
+  const rel=await relation(self,id);
+  if(!rel)return res.status(404).json({error:'Member not found.'});
+  if(rel.dm_policy==='None'||rel.dm_policy==='Friends'&&rel.friendship!=='Accepted')return res.status(403).json({error:'This member accepts messages from friends only.'});
+  const result=await query(`WITH sent AS (
+      INSERT INTO DirectMessage (sender_id,recipient_id,body) VALUES ($1,$2,$3) RETURNING *
+    ), notification AS (
+      INSERT INTO Notification (user_id,title,message,notification_type,link_path)
+      SELECT $2,'New message','You have a new message.','System',$4 FROM sent
+    ) SELECT * FROM sent`,[self,id,body,`/messages/${self}`]);
+  return res.status(201).json(result.rows[0]);
+});
 
 router.get('/notifications', async (req: AuthRequest,res: Response)=>{const before=integer(req.query.before),result=await query('SELECT notification_id,title,message,notification_type,link_path,is_read,created_at FROM Notification WHERE user_id=$1 AND ($2::int IS NULL OR notification_id<$2) ORDER BY notification_id DESC LIMIT 50',[req.user!.userId,before]);return res.json(result.rows);});
 router.patch('/notifications/:id', async (req: AuthRequest,res: Response)=>{const result=await query('UPDATE Notification SET is_read=TRUE WHERE notification_id=$1 AND user_id=$2 RETURNING notification_id',[integer(req.params.id),req.user!.userId]);if(!result.rowCount)return res.status(404).json({error:'Notification not found.'});return res.json(result.rows[0]);});
@@ -314,7 +329,7 @@ router.patch('/moderation/reports/:id', requireRole('Admin'), async (req: AuthRe
 router.patch('/moderation/members/:id/suspension', requireRole('Admin'), async (req: AuthRequest,res: Response)=>{
   const id=integer(req.params.id),suspend=req.body?.suspend===true,note=String(req.body?.note||'').slice(0,2000);
   if(!id||id===req.user!.userId)return res.status(400).json({error:'Invalid member.'});
-  const client=await pool.connect();try{await client.query('BEGIN');const result=await client.query(`UPDATE users SET suspended_at=CASE WHEN $1 THEN CURRENT_TIMESTAMP ELSE NULL END WHERE user_id=$2 AND EXISTS (SELECT 1 FROM Member WHERE user_id=$2) RETURNING user_id,suspended_at`,[suspend,id]);if(!result.rowCount){await client.query('ROLLBACK');return res.status(404).json({error:'Member not found.'});}await client.query('INSERT INTO ModerationAction (admin_id,action,note) VALUES ($1,$2,$3)',[req.user!.userId,suspend?'SuspendMember':'RestoreMember',`${id}: ${note}`]);await client.query('COMMIT');return res.json(result.rows[0]);}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
+  const client=await pool.connect();try{await client.query('BEGIN');const result=await client.query(`UPDATE users SET suspended_at=CASE WHEN $1 THEN CURRENT_TIMESTAMP ELSE NULL END WHERE user_id=$2 AND EXISTS (SELECT 1 FROM Member WHERE user_id=$2) RETURNING user_id,suspended_at`,[suspend,id]);if(!result.rowCount){await client.query('ROLLBACK');return res.status(404).json({error:'Member not found.'});}await client.query('INSERT INTO ModerationAction (admin_id,action,note) VALUES ($1,$2,$3)',[req.user!.userId,suspend?'SuspendMember':'RestoreMember',`${id}: ${note}`]);await client.query('COMMIT');clearAccountStateCache(id);return res.json(result.rows[0]);}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
 });
 
 export default router;

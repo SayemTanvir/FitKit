@@ -20,12 +20,17 @@ const requiredDatabaseSetting = (name: string): string => {
   return value;
 };
 
+const databaseTimeZone = /^[A-Za-z_]+\/[A-Za-z_]+$/.test(process.env.APP_TIME_ZONE || '')
+  ? process.env.APP_TIME_ZONE!
+  : 'Asia/Dhaka';
+
 const pool = new Pool({
   host: requiredDatabaseSetting('DB_HOST'),
   port: parseInt(process.env.DB_PORT || '5432', 10),
   database: requiredDatabaseSetting('DB_NAME'),
   user: requiredDatabaseSetting('DB_USER'),
   password: requiredDatabaseSetting('DB_PASSWORD'),
+  options: `-c timezone=${databaseTimeZone}`,
   ssl: process.env.DB_SSL === 'true'
     ? { rejectUnauthorized: false }
     : undefined,

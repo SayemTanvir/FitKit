@@ -12,6 +12,7 @@ import {
 } from '../services/community';
 import toast from 'react-hot-toast';
 import UserAvatar from '../components/UserAvatar';
+import { formatBangladeshDateTime } from '../utils/time';
 
 export function NotificationCenter() {
   const [items, setItems] = useState<any[]>([]);
@@ -63,7 +64,7 @@ export function NotificationCenter() {
     {items.map((item) => <article key={item.notification_id} className={`glass rounded-2xl p-4 flex items-start gap-3 ${!item.is_read ? 'border-lime-400/30' : ''}`}>
       <button type="button" onClick={() => open(item)} className="flex-1 text-left">
         <p className="text-sm font-semibold text-white">{item.title}{!item.is_read && <span className="ml-2 text-lime-300">●</span>}</p>
-        <p className="text-xs text-slate-400 mt-1">{item.message} · {new Date(item.created_at).toLocaleString()}</p>
+        <p className="text-xs text-slate-400 mt-1">{item.message} · {formatBangladeshDateTime(item.created_at)}</p>
       </button>
       <button type="button" onClick={() => remove(item.notification_id)} aria-label={`Delete ${item.title}`} className="p-2 text-slate-500 hover:text-red-300"><Trash2 className="w-4 h-4" /></button>
     </article>)}

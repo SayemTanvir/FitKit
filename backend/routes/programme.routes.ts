@@ -278,6 +278,22 @@ router.delete('/:id/draft', requireRole('Admin'), async (req: AuthRequest, res: 
   }
 });
 
+router.delete('/:id', requireRole('Admin'), async (req: AuthRequest, res: Response) => {
+  const programmeId=Number(req.params.id);
+  if(!Number.isInteger(programmeId)||programmeId<1)return res.status(400).json({error:'Invalid programme ID.'});
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const found=await client.query('SELECT programme_id FROM TrainingProgramme WHERE programme_id=$1 AND admin_id=$2 FOR UPDATE',[programmeId,req.user!.userId]);
+    if(!found.rowCount){await client.query('ROLLBACK');return res.status(404).json({error:'Programme not found.'});}
+    await client.query(`DELETE FROM ProgrammeEnrollment WHERE version_id IN
+      (SELECT version_id FROM ProgrammeVersion WHERE programme_id=$1)`,[programmeId]);
+    await client.query('DELETE FROM TrainingProgramme WHERE programme_id=$1',[programmeId]);
+    await client.query('COMMIT');
+    return res.json({message:'Programme and its enrollments permanently deleted.'});
+  }catch(error){await client.query('ROLLBACK');console.error('Delete programme:',error);return res.status(500).json({error:'Could not delete programme.'});}finally{client.release();}
+});
+
 router.put('/:id/structure', requireRole('Admin'), async (req: AuthRequest, res: Response) => {
   const programmeId = Number(req.params.id);
   const found = await query(`SELECT tp.duration_weeks,tp.days_per_week,tp.session_minutes,pv.version_id FROM TrainingProgramme tp JOIN ProgrammeVersion pv ON pv.programme_id=tp.programme_id WHERE tp.programme_id=$1 AND tp.admin_id=$2 AND pv.status='Draft' ORDER BY pv.version_number DESC LIMIT 1`, [programmeId,req.user!.userId]);
@@ -291,22 +307,52 @@ router.put('/:id/structure', requireRole('Admin'), async (req: AuthRequest, res:
     const locked = await client.query(`SELECT status FROM ProgrammeVersion WHERE version_id=$1 FOR UPDATE`, [found.rows[0].version_id]);
     if (locked.rows[0]?.status !== 'Draft') { await client.query('ROLLBACK'); return res.status(409).json({ error: 'This version is no longer editable.' }); }
     await client.query('DELETE FROM ProgrammeWeek WHERE version_id=$1', [found.rows[0].version_id]);
-    for (const week of req.body.weeks) {
-      const w = await client.query('INSERT INTO ProgrammeWeek (version_id,week_number,title,is_deload,progression_notes) VALUES ($1,$2,$3,$4,$5) RETURNING week_id', [found.rows[0].version_id,week.week_number,String(week.title||`Week ${week.week_number}`),week.is_deload===true,String(week.progression_notes||'')]);
-      for (const day of week.days) {
-        const d = await client.query('INSERT INTO ProgrammeDay (week_id,day_number,day_type,title,notes) VALUES ($1,$2,$3,$4,$5) RETURNING day_id', [w.rows[0].week_id,day.day_number,day.day_type,String(day.title||`Day ${day.day_number}`),String(day.notes||'')]);
-        if (day.day_type === 'Rest') continue;
-        const s = await client.query('INSERT INTO WorkoutSession (day_id,title,estimated_minutes) VALUES ($1,$2,$3) RETURNING session_id', [d.rows[0].day_id,String(day.session_title),Number(day.estimated_minutes)||found.rows[0].session_minutes]);
-        for (let position = 0; position < day.exercises.length; position++) {
-          const x = day.exercises[position];
-          await client.query(
-            `INSERT INTO ExercisePrescription (session_id,exercise_id,position,sets,tracking_type,rep_min,rep_max,target_load_kg,duration_seconds,distance_meters,rpe,rest_seconds,tempo,is_warmup,notes)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
-            [s.rows[0].session_id,Number(x.exercise_id),position+1,Number(x.sets),x.tracking_type,x.tracking_type==='reps'?Number(x.rep_min):null,x.tracking_type==='reps'?Number(x.rep_max):null,x.target_load_kg?Number(x.target_load_kg):null,x.tracking_type==='time'?Number(x.duration_seconds):null,x.tracking_type==='distance'?Number(x.distance_meters):null,x.rpe?Number(x.rpe):null,Number(x.rest_seconds)||0,String(x.tempo||'')||null,x.is_warmup===true,String(x.notes||'')]
-          );
-        }
-      }
-    }
+    await client.query(`WITH week_data AS (
+        SELECT (week->>'week_number')::int AS week_number,
+          COALESCE(week->>'title','Week '||(week->>'week_number')) AS title,
+          COALESCE((week->>'is_deload')::boolean,FALSE) AS is_deload,
+          COALESCE(week->>'progression_notes','') AS progression_notes,
+          week->'days' AS days
+        FROM jsonb_array_elements($2::jsonb) AS week
+      ), inserted_weeks AS (
+        INSERT INTO ProgrammeWeek(version_id,week_number,title,is_deload,progression_notes)
+        SELECT $1,week_number,title,is_deload,progression_notes FROM week_data
+        RETURNING week_id,week_number
+      ), day_data AS (
+        SELECT iw.week_id,(day->>'day_number')::int AS day_number,
+          day->>'day_type' AS day_type,COALESCE(day->>'title','') AS title,
+          COALESCE(day->>'notes','') AS notes,COALESCE(day->>'session_title','') AS session_title,
+          COALESCE((day->>'estimated_minutes')::int,$3::int) AS estimated_minutes,
+          COALESCE(day->'exercises','[]'::jsonb) AS exercises
+        FROM week_data wd JOIN inserted_weeks iw USING(week_number)
+        CROSS JOIN LATERAL jsonb_array_elements(wd.days) AS day
+      ), inserted_days AS (
+        INSERT INTO ProgrammeDay(week_id,day_number,day_type,title,notes)
+        SELECT week_id,day_number,day_type,title,notes FROM day_data
+        RETURNING day_id,week_id,day_number,day_type
+      ), session_data AS (
+        SELECT id.day_id,dd.session_title,dd.estimated_minutes,dd.exercises
+        FROM inserted_days id JOIN day_data dd USING(week_id,day_number)
+        WHERE id.day_type='Training'
+      ), inserted_sessions AS (
+        INSERT INTO WorkoutSession(day_id,title,estimated_minutes)
+        SELECT day_id,session_title,estimated_minutes FROM session_data
+        RETURNING session_id,day_id
+      ), exercise_data AS (
+        SELECT ins.session_id,exercise.value AS exercise,exercise.ordinality::int AS position
+        FROM session_data sd JOIN inserted_sessions ins USING(day_id)
+        CROSS JOIN LATERAL jsonb_array_elements(sd.exercises) WITH ORDINALITY AS exercise(value,ordinality)
+      )
+      INSERT INTO ExercisePrescription(session_id,exercise_id,position,sets,tracking_type,rep_min,rep_max,target_load_kg,duration_seconds,distance_meters,rpe,rest_seconds,tempo,is_warmup,notes)
+      SELECT session_id,(exercise->>'exercise_id')::int,position,(exercise->>'sets')::int,exercise->>'tracking_type',
+        CASE WHEN exercise->>'tracking_type'='reps' THEN (exercise->>'rep_min')::int END,
+        CASE WHEN exercise->>'tracking_type'='reps' THEN (exercise->>'rep_max')::int END,
+        NULLIF(exercise->>'target_load_kg','')::numeric,
+        CASE WHEN exercise->>'tracking_type'='time' THEN (exercise->>'duration_seconds')::int END,
+        CASE WHEN exercise->>'tracking_type'='distance' THEN (exercise->>'distance_meters')::int END,
+        NULLIF(exercise->>'rpe','')::numeric,COALESCE((exercise->>'rest_seconds')::int,0),
+        NULLIF(exercise->>'tempo',''),COALESCE((exercise->>'is_warmup')::boolean,FALSE),COALESCE(exercise->>'notes','')
+      FROM exercise_data`,[found.rows[0].version_id,JSON.stringify(req.body.weeks),found.rows[0].session_minutes]);
     await client.query('UPDATE TrainingProgramme SET updated_at=CURRENT_TIMESTAMP WHERE programme_id=$1', [programmeId]);
     await client.query('COMMIT');
     return res.json(await loadProgramme(programmeId, found.rows[0].version_id));

@@ -81,9 +81,9 @@ export async function saveExerciseLibraryItem(data: Record<string, unknown>, id?
   });
 }
 
-export async function setExerciseActive(id: number, is_active: boolean) {
-  return request<any>(`/exercises/${id}/archive`, {
-    method: 'PATCH', headers: getAuthHeaders(), body: JSON.stringify({ is_active }),
+export async function deleteExerciseLibraryItem(id: number) {
+  return request<{ message: string }>(`/exercises/${id}`, {
+    method: 'DELETE', headers: getAuthHeaders(),
   });
 }
 

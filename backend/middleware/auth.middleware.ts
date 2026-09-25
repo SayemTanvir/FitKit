@@ -11,6 +11,14 @@ export interface AuthRequest extends Request {
   user?: AuthenticatedUser;
 }
 
+type AccountState = { role: AuthenticatedUser['role']; suspended: boolean; expiresAt: number };
+const accountStateCache = new Map<number, AccountState>();
+const ACCOUNT_CACHE_MS = 15_000;
+
+export function clearAccountStateCache(userId: number) {
+  accountStateCache.delete(userId);
+}
+
 export function verifyToken(req: AuthRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -31,11 +39,17 @@ export function verifyToken(req: AuthRequest, res: Response, next: NextFunction)
     }
 
     try {
-      const current = await query(`SELECT u.suspended_at,
-        CASE WHEN a.user_id IS NOT NULL THEN 'Admin' WHEN m.user_id IS NOT NULL THEN 'Member' END AS role
-        FROM users u LEFT JOIN Admin a ON a.user_id=u.user_id LEFT JOIN Member m ON m.user_id=u.user_id WHERE u.user_id=$1`,[payload.userId]);
-      if (!current.rowCount || current.rows[0].role !== payload.role) return res.status(401).json({ error: 'Account no longer available.' });
-      if (current.rows[0].suspended_at) return res.status(403).json({ error: 'Account suspended.' });
+      let state = accountStateCache.get(payload.userId);
+      if (!state || state.expiresAt <= Date.now()) {
+        const current = await query(`SELECT u.suspended_at,
+          CASE WHEN a.user_id IS NOT NULL THEN 'Admin' WHEN m.user_id IS NOT NULL THEN 'Member' END AS role
+          FROM users u LEFT JOIN Admin a ON a.user_id=u.user_id LEFT JOIN Member m ON m.user_id=u.user_id WHERE u.user_id=$1`,[payload.userId]);
+        if (!current.rowCount || !current.rows[0].role) return res.status(401).json({ error: 'Account no longer available.' });
+        state = { role: current.rows[0].role, suspended: Boolean(current.rows[0].suspended_at), expiresAt: Date.now() + ACCOUNT_CACHE_MS };
+        accountStateCache.set(payload.userId, state);
+      }
+      if (state.role !== payload.role) return res.status(401).json({ error: 'Account no longer available.' });
+      if (state.suspended) return res.status(403).json({ error: 'Account suspended.' });
       req.user = payload as AuthenticatedUser;
       next();
     } catch (databaseError) { next(databaseError); }

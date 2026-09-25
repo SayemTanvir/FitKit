@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { fetchExercises, saveExerciseLibraryItem, setExerciseActive } from '../services/api';
+import { deleteExerciseLibraryItem, fetchExercises, saveExerciseLibraryItem } from '../services/api';
 import ImageUploadField from '../components/ImageUploadField';
 import { StoredImage } from '../components/UserAvatar';
 
@@ -62,10 +62,13 @@ export default function ExerciseLibrary() {
     } finally { setBusy(false); }
   };
 
-  const toggle = async (item: any) => {
+  const remove = async (item: any) => {
+    if (!window.confirm(`Permanently delete “${item.name}”? This cannot be undone.`)) return;
     try {
-      await setExerciseActive(item.exercise_id, !item.is_active);
-      await load();
+      await deleteExerciseLibraryItem(item.exercise_id);
+      setItems((previous) => previous.filter((entry) => entry.exercise_id !== item.exercise_id));
+      if (editing === item.exercise_id) { setEditing(null); setForm(blank); }
+      toast.success('Exercise deleted');
     } catch (e: any) { toast.error(e.message); }
   };
   const shown = items.filter((item) => item.name.toLowerCase().includes(search.toLowerCase()) && (category === 'All' || item.category === category));
@@ -75,7 +78,7 @@ export default function ExerciseLibrary() {
     <section className="grid md:grid-cols-3 gap-3">
       <div className="glass rounded-2xl p-4"><p className="text-xs text-lime-300 font-semibold">1 · Define</p><p className="text-sm text-slate-300 mt-2">Add technique, muscles, equipment, difficulty, and how performance is measured.</p></div>
       <div className="glass rounded-2xl p-4"><p className="text-xs text-cyan-300 font-semibold">2 · Prescribe</p><p className="text-sm text-slate-300 mt-2">Programme Builder uses these entries to set reps/load, time, or distance targets.</p></div>
-      <div className="glass rounded-2xl p-4"><p className="text-xs text-amber-300 font-semibold">3 · Archive safely</p><p className="text-sm text-slate-300 mt-2">Archived exercises cannot be added to new drafts but remain visible in published history.</p></div>
+      <div className="glass rounded-2xl p-4"><p className="text-xs text-red-300 font-semibold">3 · Delete unused entries</p><p className="text-sm text-slate-300 mt-2">Unused exercises can be permanently deleted. Exercises referenced by plans or workout history are protected.</p></div>
     </section>
     <form onSubmit={submit} className="glass rounded-2xl p-6 space-y-4">
       <div><h2 className="font-display text-lg font-semibold text-white">{editing ? 'Edit exercise' : 'New exercise'}</h2><p className="text-xs text-slate-500 mt-1">Track by controls what members record during a workout: reps and load, elapsed time, or distance.</p></div>
@@ -94,7 +97,7 @@ export default function ExerciseLibrary() {
     <section className="glass rounded-2xl p-6">
       <div className="flex flex-wrap gap-3 mb-4"><input aria-label="Search exercises" placeholder="Search exercises" value={search} onChange={(e) => setSearch(e.target.value)} className="input-pro max-w-xs" /><select aria-label="Filter exercise category" value={category} onChange={(e) => setCategory(e.target.value)} className="input-pro max-w-xs"><option>All</option><option>Strength</option><option>Cardio</option><option>Flexibility</option></select></div>
       {error && <p className="text-red-300">{error}</p>}
-      <div className="grid md:grid-cols-2 gap-3">{shown.map((item) => <div key={item.exercise_id} className="rounded-xl border border-white/10 p-4"><div className="flex justify-between gap-2"><h3 className="text-sm font-semibold text-white">{item.name}</h3><span className={`text-xs ${item.is_active ? 'text-lime-300' : 'text-amber-300'}`}>{item.is_active ? 'Active' : 'Archived'}</span></div><p className="text-xs text-slate-400 mt-1">{item.category} · {item.target_muscle_group} · {item.difficulty_level} · {item.tracking_type}</p><p className="text-xs text-slate-400 mt-2 line-clamp-2">{item.instructions}</p>{item.media_url && <StoredImage url={item.media_url} alt={`${item.name} demonstration`} className="max-h-36 rounded-lg mt-2 object-cover" />}<div className="flex gap-3 mt-3"><button type="button" onClick={() => edit(item)} className="text-xs text-cyan-300">Edit</button><button type="button" onClick={() => toggle(item)} className="text-xs text-amber-300">{item.is_active ? 'Archive' : 'Restore'}</button></div></div>)}</div>
+      <div className="grid md:grid-cols-2 gap-3">{shown.map((item) => <div key={item.exercise_id} className="rounded-xl border border-white/10 p-4"><div className="flex justify-between gap-2"><h3 className="text-sm font-semibold text-white">{item.name}</h3><span className="text-xs text-lime-300">Active</span></div><p className="text-xs text-slate-400 mt-1">{item.category} · {item.target_muscle_group} · {item.difficulty_level} · {item.tracking_type}</p><p className="text-xs text-slate-400 mt-2 line-clamp-2">{item.instructions}</p>{item.media_url && <StoredImage url={item.media_url} alt={`${item.name} demonstration`} className="max-h-36 rounded-lg mt-2 object-cover" />}<div className="flex gap-3 mt-3"><button type="button" onClick={() => edit(item)} className="text-xs text-cyan-300">Edit</button><button type="button" onClick={() => remove(item)} className="text-xs text-red-300">Delete</button></div></div>)}</div>
     </section>
   </div>;
 }

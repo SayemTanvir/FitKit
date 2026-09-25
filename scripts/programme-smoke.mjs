@@ -52,8 +52,6 @@ try {
     description: 'Disposable integration exercise.', instructions: 'Move with control.', media_url:exerciseImage,
   });
   exerciseId = exercise.exercise_id;
-  await call(`/exercises/${exerciseId}/archive`, admin.token, 'PATCH', { is_active: false });
-  await call(`/exercises/${exerciseId}/archive`, admin.token, 'PATCH', { is_active: true });
   const draft = await call('/programmes', admin.token, 'POST', {
     name: 'Disposable two-week test', description: 'Integration test programme.', goal: 'strength', difficulty: 'Beginner', duration_weeks: 2,
     days_per_week: 2, session_minutes: 30, environment: 'home', equipment: 'Bodyweight', audience: 'Demo members', visibility: 'public',cover_url:cover,
@@ -91,13 +89,15 @@ try {
   if (stillPublished.version_id !== published.version_id) throw new Error('Member saw an unpublished draft version.');
   const original = await call(`/programmes/${programmeId}?version=${published.version_id}`, member.token);
   if (original.weeks[1].days[2].exercises[0].rep_min !== 10) throw new Error('Published version changed after cloning.');
-  await call(`/programmes/${programmeId}/archive`, admin.token, 'PATCH', { archived: true });
+  await call(`/programmes/${programmeId}`, admin.token, 'DELETE');
   const hidden = await call('/programmes', member.token);
-  if (hidden.some((item) => item.programme_id === programmeId)) throw new Error('Archived programme was visible in discovery.');
-  const enrolledArchive = await call(`/programmes/${programmeId}?version=${published.version_id}`, member.token);
-  if (enrolledArchive.version_id !== published.version_id) throw new Error('Archiving broke an existing enrollment.');
-  await call(`/programmes/${programmeId}/archive`, admin.token, 'PATCH', { archived: false });
-  console.log('Programme smoke passed: draft, progression, publication, enrollment, actual sets, completion, version integrity, archive.');
+  if (hidden.some((item) => item.programme_id === programmeId)) throw new Error('Deleted programme remained visible in discovery.');
+  const remainingEnrollments = await call('/programmes/enrollments', member.token);
+  if (remainingEnrollments.some((item) => item.programme_id === programmeId)) throw new Error('Deleted programme enrollment remained visible.');
+  programmeId = undefined;
+  await call(`/exercises/${exerciseId}`, admin.token, 'DELETE');
+  exerciseId = undefined;
+  console.log('Programme smoke passed: draft, progression, publication, enrollment, actual sets, completion, version integrity, and permanent deletion.');
 } finally {
   if (memberId) await pool.query('DELETE FROM users WHERE user_id=$1', [memberId]);
   if (programmeId) await pool.query('DELETE FROM TrainingProgramme WHERE programme_id=$1', [programmeId]);

@@ -64,10 +64,26 @@ async function saveExercise(req: AuthRequest, res: Response, id?: number) {
 
 router.post('/', verifyToken, requireRole('Admin'), (req: AuthRequest,res: Response)=>saveExercise(req,res));
 router.put('/:id', verifyToken, requireRole('Admin'), (req: AuthRequest,res: Response)=>saveExercise(req,res,Number(req.params.id)));
-router.patch('/:id/archive', verifyToken, requireRole('Admin'), async (req: AuthRequest,res: Response)=>{
-  const result=await query('UPDATE Exercise SET is_active=$1 WHERE exercise_id=$2 RETURNING exercise_id,is_active',[req.body?.is_active===true,Number(req.params.id)]);
-  if (!result.rowCount) return res.status(404).json({ error: 'Exercise not found.' });
-  return res.json(result.rows[0]);
+router.delete('/:id', verifyToken, requireRole('Admin'), async (req: AuthRequest,res: Response)=>{
+  const exerciseId=Number(req.params.id);
+  if(!Number.isInteger(exerciseId)||exerciseId<1)return res.status(400).json({error:'Invalid exercise ID.'});
+  const dependencies=await query(`SELECT e.media_url,
+    (SELECT COUNT(*)::int FROM WorkoutPlanExercise WHERE exercise_id=e.exercise_id) AS plans,
+    (SELECT COUNT(*)::int FROM WorkoutEntry WHERE exercise_id=e.exercise_id) AS logs,
+    (SELECT COUNT(*)::int FROM ExercisePrescription WHERE exercise_id=e.exercise_id) AS programmes
+    FROM Exercise e WHERE e.exercise_id=$1`,[exerciseId]);
+  if(!dependencies.rowCount)return res.status(404).json({error:'Exercise not found.'});
+  const usage=dependencies.rows[0];
+  if(usage.plans||usage.logs||usage.programmes)return res.status(409).json({error:'This exercise is used by a plan, programme, or workout history and cannot be permanently deleted.'});
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    await client.query('DELETE FROM Exercise WHERE exercise_id=$1',[exerciseId]);
+    const mediaId=/^\/api\/community\/media\/(\d+)$/.exec(String(usage.media_url||''))?.[1];
+    if(mediaId)await client.query("DELETE FROM MediaAsset WHERE media_id=$1 AND purpose='Exercise'",[Number(mediaId)]);
+    await client.query('COMMIT');
+    return res.json({message:'Exercise permanently deleted.'});
+  }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 });
 
 export default router;

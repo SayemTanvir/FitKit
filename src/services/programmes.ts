@@ -96,7 +96,7 @@ export const createProgramme = (details: unknown) => call<Programme>('', 'POST',
 export const updateProgramme = (id: number, details: unknown) => call<Programme>(`/${id}`, 'PUT', details);
 export const saveProgrammeStructure = (id: number, weeks: ProgrammeWeek[]) => call<Programme>(`/${id}/structure`, 'PUT', { weeks });
 export const publishProgramme = (id: number) => call<Programme>(`/${id}/publish`, 'POST');
-export const setProgrammeArchived = (id: number, archived: boolean) => call<Programme>(`/${id}/archive`, 'PATCH', { archived });
+export const deleteProgramme = (id: number) => call<{message:string}>(`/${id}`, 'DELETE');
 export const newProgrammeVersion = (id: number) => call<Programme>(`/${id}/new-version`, 'POST');
 export const deleteProgrammeDraft = (id: number) => call<{ message: string; programme_deleted: boolean }>(`/${id}/draft`, 'DELETE');
 export const enrollProgramme = (id: number) => call<any>(`/${id}/enroll`, 'POST');
