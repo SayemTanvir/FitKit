@@ -203,7 +203,7 @@ const visibleSql=`p.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM UserBlock b
   (p.user_id=$1 OR p.visibility='Public' OR
    (p.visibility='Followers' AND EXISTS (SELECT 1 FROM FollowRelationship f WHERE f.follower_id=$1 AND f.followed_id=p.user_id AND f.status='Accepted')) OR
    (p.visibility='Friends' AND EXISTS (SELECT 1 FROM FriendRequest f WHERE ((f.requester_id=$1 AND f.recipient_id=p.user_id) OR (f.recipient_id=$1 AND f.requester_id=p.user_id)) AND f.status='Accepted'))) AND
-  (p.user_id=$1 OR NOT EXISTS (SELECT 1 FROM MemberProfile mp WHERE mp.user_id=p.user_id AND mp.is_private=TRUE) OR
+  (p.user_id=$1 OR p.visibility='Public' OR NOT EXISTS (SELECT 1 FROM MemberProfile mp WHERE mp.user_id=p.user_id AND mp.is_private=TRUE) OR
    EXISTS (SELECT 1 FROM FollowRelationship f WHERE f.follower_id=$1 AND f.followed_id=p.user_id AND f.status='Accepted') OR
    EXISTS (SELECT 1 FROM FriendRequest f WHERE ((f.requester_id=$1 AND f.recipient_id=p.user_id) OR (f.recipient_id=$1 AND f.requester_id=p.user_id)) AND f.status='Accepted'))`;
 async function postVisible(viewer: number,postId: number){const result=await query(`SELECT p.user_id FROM SocialPost p WHERE p.post_id=$2 AND ${visibleSql}`,[viewer,postId]);return result.rows[0]||null;}

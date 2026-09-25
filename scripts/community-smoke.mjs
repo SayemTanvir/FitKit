@@ -49,10 +49,10 @@ try{
   const post=await call('/community/posts',b.token,'POST',{body:'Private-account public post for smoke test',visibility:'Public',image_url:postImage},201);
   await call('/community/posts',a.token,'POST',{body:'Bad image reference',visibility:'Public',image_url:postImage},403);
   const privateImage=await fetch(`${base.replace(/\/api$/,'')}${postImage}`,{headers:{Authorization:`Bearer ${a.token}`}});
-  if(privateImage.status!==404)throw new Error('Private post image leaked.');
+  if(privateImage.status!==200)throw new Error('Public post image was not visible in Discover.');
   const before=await call('/community/posts?scope=discover',a.token);
-  if(before.some((item)=>item.post_id===post.post_id))throw new Error('Private account post leaked before follow acceptance.');
-  await call(`/community/posts/${post.post_id}`,a.token,'GET',undefined,404);
+  if(!before.some((item)=>item.post_id===post.post_id))throw new Error('Public post from a private account was missing from Discover.');
+  await call(`/community/posts/${post.post_id}`,a.token);
   await call(`/community/members/${aId}/follow`,b.token,'PATCH',{action:'accept'});
   const after=await call(`/community/posts?scope=user&user=${bId}`,a.token);
   if(!after.some((item)=>item.post_id===post.post_id))throw new Error('Accepted follower cannot see post.');
