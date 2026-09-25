@@ -24,7 +24,7 @@ export default function Landing() {
       </header>
 
       <main className="relative z-[1]">
-        <section className="mx-auto grid max-w-7xl items-center gap-14 px-5 pb-24 pt-16 sm:px-8 sm:pt-24 lg:grid-cols-[0.9fr_1.1fr] lg:px-10 lg:pb-32 lg:pt-28">
+        <section className="mx-auto grid max-w-7xl items-center gap-14 px-5 pb-24 pt-4 sm:px-8 sm:pt-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-10 lg:pb-28 lg:pt-8">
           <div>
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-lime-400/20 bg-lime-400/10 px-3 py-1.5 text-xs font-semibold text-lime-200">
               <span className="h-1.5 w-1.5 rounded-full bg-lime-400" /> Your fitness, finally in one place
