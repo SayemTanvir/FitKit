@@ -56,13 +56,23 @@ router.get('/media/:id',async(req:AuthRequest,res:Response)=>{
   if(!result.rowCount)return res.status(404).end();
   const asset=result.rows[0];
   if(asset.owner_id!==req.user!.userId){
-    if(await blocked(req.user!.userId,asset.owner_id))return res.status(404).end();
+    if(req.user!.role!=='Admin'&&await blocked(req.user!.userId,asset.owner_id))return res.status(404).end();
     if(asset.purpose==='Avatar'){
       const linked=await query('SELECT 1 FROM users u LEFT JOIN MemberProfile mp ON mp.user_id=u.user_id WHERE u.user_id=$1 AND (u.profile_photo_url=$2 OR mp.photo_url=$2)',[asset.owner_id,mediaPath(id)]);
       if(!linked.rowCount)return res.status(404).end();
     }else if(asset.purpose==='Post'){
       const posts=await query('SELECT post_id FROM SocialPost WHERE user_id=$1 AND image_url=$2 AND deleted_at IS NULL',[asset.owner_id,mediaPath(id)]);
-      let visible=false;for(const post of posts.rows){if(await postVisible(req.user!.userId,post.post_id)){visible=true;break;}}
+      let visible=false;
+      if(req.user!.role==='Admin'){
+        const reported=await query(`SELECT 1 FROM SocialPost p WHERE p.user_id=$1 AND p.image_url=$2 AND EXISTS (
+          SELECT 1 FROM ContentReport r WHERE r.status='Open' AND (
+            (r.target_type='Post' AND r.target_id=p.post_id) OR
+            (r.target_type='Comment' AND EXISTS (SELECT 1 FROM PostComment c WHERE c.comment_id=r.target_id AND c.post_id=p.post_id))
+          )
+        ) LIMIT 1`,[asset.owner_id,mediaPath(id)]);
+        visible=!!reported.rowCount;
+      }
+      if(!visible)for(const post of posts.rows){if(await postVisible(req.user!.userId,post.post_id)){visible=true;break;}}
       if(!visible)return res.status(404).end();
     }else if(asset.purpose==='Programme'){
       const visible=await query(`SELECT 1 FROM TrainingProgramme tp JOIN ProgrammeVersion pv ON pv.programme_id=tp.programme_id
@@ -324,6 +334,49 @@ router.post('/reports', member, async (req: AuthRequest,res: Response)=>{
   }finally{client.release();}
 });
 router.get('/moderation/reports', requireRole('Admin'), async (_req: AuthRequest,res: Response)=>{const result=await query(`SELECT r.*,u.name AS reporter_name,mp.photo_url FROM ContentReport r JOIN users u ON u.user_id=r.reporter_id LEFT JOIN MemberProfile mp ON mp.user_id=r.reporter_id WHERE r.status='Open' ORDER BY r.created_at DESC LIMIT 100`);return res.json(result.rows);});
+router.get('/moderation/reports/:id/details', requireRole('Admin'), async (req: AuthRequest,res: Response)=>{
+  const reportId=integer(req.params.id);
+  if(!reportId)return res.status(400).json({error:'Invalid report ID.'});
+  const found=await query(`SELECT r.*,u.name AS reporter_name,mp.photo_url AS reporter_photo_url
+    FROM ContentReport r JOIN users u ON u.user_id=r.reporter_id
+    LEFT JOIN MemberProfile mp ON mp.user_id=r.reporter_id
+    WHERE r.report_id=$1 AND r.status='Open'`,[reportId]);
+  if(!found.rowCount)return res.status(404).json({error:'Open report not found.'});
+  const report=found.rows[0];
+  let target=null;
+  if(report.target_type==='Member'){
+    const result=await query(`SELECT u.user_id,u.name,COALESCE(mp.photo_url,u.profile_photo_url) AS photo_url,
+        u.fitness_level,u.primary_goal,u.created_at,u.suspended_at,mp.username,mp.bio,mp.interests,
+        mp.is_private,c.country_name
+      FROM users u LEFT JOIN MemberProfile mp ON mp.user_id=u.user_id
+      LEFT JOIN Country c ON c.country_id=u.country_id
+      WHERE u.user_id=$1`,[report.target_id]);
+    target=result.rows[0]||null;
+  }else if(report.target_type==='Post'){
+    const result=await query(`SELECT p.post_id,p.user_id,p.body,p.image_url,p.visibility,p.created_at,p.deleted_at,
+        u.name AS author_name,mp.username,COALESCE(mp.photo_url,u.profile_photo_url) AS author_photo_url
+      FROM SocialPost p JOIN users u ON u.user_id=p.user_id
+      LEFT JOIN MemberProfile mp ON mp.user_id=p.user_id WHERE p.post_id=$1`,[report.target_id]);
+    target=result.rows[0]||null;
+  }else if(report.target_type==='Comment'){
+    const result=await query(`SELECT c.comment_id,c.user_id,c.body,c.created_at AS comment_created_at,c.deleted_at AS comment_deleted_at,
+        u.name AS author_name,mp.username,COALESCE(mp.photo_url,u.profile_photo_url) AS author_photo_url,
+        p.post_id,p.body AS post_body,p.image_url AS post_image_url,p.visibility AS post_visibility,p.deleted_at AS post_deleted_at,
+        post_user.name AS post_author_name
+      FROM PostComment c JOIN users u ON u.user_id=c.user_id
+      LEFT JOIN MemberProfile mp ON mp.user_id=c.user_id
+      JOIN SocialPost p ON p.post_id=c.post_id JOIN users post_user ON post_user.user_id=p.user_id
+      WHERE c.comment_id=$1`,[report.target_id]);
+    target=result.rows[0]||null;
+  }else if(report.target_type==='Message'){
+    const result=await query(`SELECT d.message_id,d.body,d.created_at,d.sender_id,d.recipient_id,
+        sender.name AS sender_name,recipient.name AS recipient_name
+      FROM DirectMessage d JOIN users sender ON sender.user_id=d.sender_id
+      JOIN users recipient ON recipient.user_id=d.recipient_id WHERE d.message_id=$1`,[report.target_id]);
+    target=result.rows[0]||null;
+  }
+  return res.json({report,target});
+});
 router.patch('/moderation/reports/:id', requireRole('Admin'), async (req: AuthRequest,res: Response)=>{const status=String(req.body?.status||''),note=String(req.body?.note||'').slice(0,2000),remove=req.body?.remove===true;if(!['Resolved','Dismissed'].includes(status)||remove&&status!=='Resolved')return res.status(400).json({error:'Choose a valid moderation decision.'});const client=await pool.connect();try{await client.query('BEGIN');const result=await client.query(`UPDATE ContentReport SET status=$1,reviewer_id=$2,resolved_at=CURRENT_TIMESTAMP WHERE report_id=$3 AND status='Open' RETURNING *`,[status,req.user!.userId,integer(req.params.id)]);if(!result.rowCount){await client.query('ROLLBACK');return res.status(404).json({error:'Open report not found.'});}const report=result.rows[0];if(remove&&report.target_type==='Post')await client.query('UPDATE SocialPost SET deleted_at=CURRENT_TIMESTAMP WHERE post_id=$1',[report.target_id]);if(remove&&report.target_type==='Comment')await client.query('UPDATE PostComment SET deleted_at=CURRENT_TIMESTAMP WHERE comment_id=$1',[report.target_id]);await client.query('INSERT INTO ModerationAction (admin_id,report_id,action,note) VALUES ($1,$2,$3,$4)',[req.user!.userId,report.report_id,remove?`Remove${report.target_type}`:status,note]);await client.query('COMMIT');return res.json(report);}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}});
 router.patch('/moderation/members/:id/suspension', requireRole('Admin'), async (req: AuthRequest,res: Response)=>{
   const id=integer(req.params.id),suspend=req.body?.suspend===true,note=String(req.body?.note||'').slice(0,2000);

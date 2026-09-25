@@ -85,6 +85,15 @@ try{
   const report=await call('/community/reports',a.token,'POST',{target_type:'Post',target_id:post.post_id,reason:'Disposable moderation test'},201);reportId=report.report_id;
   const queue=await call('/community/moderation/reports',admin.token);
   if(!queue.some((item)=>item.report_id===reportId))throw new Error('Admin moderation queue missing report.');
+  const postDetails=await call(`/community/moderation/reports/${reportId}/details`,admin.token);
+  if(postDetails.report.target_type!=='Post'||postDetails.target?.body!=='Private-account public post for smoke test')throw new Error('Admin report details did not include the reported post.');
+  const adminPostImage=await fetch(`${base.replace(/\/api$/,'')}${postImage}`,{headers:{Authorization:`Bearer ${admin.token}`}});
+  if(adminPostImage.status!==200)throw new Error('Admin could not view the reported post image.');
+  await call(`/community/moderation/reports/${reportId}/details`,a.token,'GET',undefined,403);
+  const accountReport=await call('/community/reports',a.token,'POST',{target_type:'Member',target_id:bId,reason:'Disposable account detail test'},201);
+  const accountDetails=await call(`/community/moderation/reports/${accountReport.report_id}/details`,admin.token);
+  if(accountDetails.report.target_type!=='Member'||accountDetails.target?.user_id!==bId||!accountDetails.target.is_private)throw new Error('Admin report details did not include the reported private account.');
+  await call(`/community/moderation/reports/${accountReport.report_id}`,admin.token,'PATCH',{status:'Dismissed',note:'Smoke test'});
   await call(`/community/moderation/reports/${reportId}`,admin.token,'PATCH',{status:'Dismissed',note:'Smoke test'});
   await call(`/community/members/${bId}/block`,a.token,'POST');
   const blockedImage=await fetch(`${base.replace(/\/api$/,'')}${postImage}`,{headers:{Authorization:`Bearer ${a.token}`}});

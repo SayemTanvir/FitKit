@@ -37,5 +37,6 @@ export const deleteNotification=(id:number)=>request<any>(`/notifications/${id}`
 export const clearNotifications=()=>request<any>('/notifications','DELETE');
 export const reportContent=(target_type:string,target_id:number,reason:string)=>request<any>('/reports','POST',{target_type,target_id,reason});
 export const moderationReports=()=>request<any[]>('/moderation/reports');
+export const moderationReportDetails=(id:number)=>request<{report:any;target:any}>(`/moderation/reports/${id}/details`);
 export const resolveReport=(id:number,status:'Resolved'|'Dismissed',note:string,remove=false)=>request<any>(`/moderation/reports/${id}`,'PATCH',{status,note,remove});
 export const suspendMember=(id:number,suspend:boolean,note:string)=>request<any>(`/moderation/members/${id}/suspension`,'PATCH',{suspend,note});
