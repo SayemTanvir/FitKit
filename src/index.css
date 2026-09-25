@@ -19,6 +19,32 @@ body {
   color: #e5e7eb;
 }
 
+.public-shell {
+  background:
+    radial-gradient(900px 500px at 80% 5%, rgba(163, 230, 53, 0.075), transparent 62%),
+    radial-gradient(700px 500px at 8% 70%, rgba(34, 211, 238, 0.065), transparent 58%),
+    #08090c;
+}
+
+.public-orb { position: fixed; border-radius: 999px; filter: blur(90px); pointer-events: none; opacity: .16; }
+.public-orb-one { width: 360px; height: 360px; right: -140px; top: 8%; background: #a3e635; }
+.public-orb-two { width: 320px; height: 320px; left: -150px; bottom: 2%; background: #22d3ee; }
+.hero-dashboard { transform: perspective(1400px) rotateY(-3deg) rotateX(1deg); }
+.auth-label { display: block; margin-bottom: .4rem; color: #cbd5e1; font-size: .75rem; font-weight: 600; }
+.auth-input { width: 100%; border: 1px solid rgba(255,255,255,.1); border-radius: .75rem; background: #0f172a; padding: .625rem .875rem .625rem 2.5rem; color: #fff; font-size: .875rem; outline: none; transition: border-color .2s; }
+.auth-input:focus { border-color: rgba(34,211,238,.6); }
+
+.intro-reveal { position: fixed; inset: 0; z-index: 9999; display: grid; place-content: center; justify-items: center; background: #08090c; animation: intro-exit .38s ease .7s forwards; }
+.intro-mark { display: grid; width: 68px; height: 68px; place-items: center; border-radius: 22px; color: #052e16; background: linear-gradient(135deg,#a3e635,#34d399); box-shadow: 0 0 55px rgba(163,230,53,.2); animation: intro-mark .65s cubic-bezier(.22,1,.36,1) both; }
+.intro-mark svg { width: 44px; height: 44px; }
+.intro-reveal p { margin-top: 16px; color: #fff; font-family: 'Space Grotesk',sans-serif; font-size: 20px; font-weight: 800; letter-spacing: .12em; animation: intro-copy .45s ease .18s both; }
+.intro-reveal > span { margin-top: 4px; color: #64748b; font-size: 8px; font-weight: 700; letter-spacing: .25em; animation: intro-copy .45s ease .26s both; }
+@keyframes intro-mark { from { opacity: 0; transform: scale(.72) rotate(-8deg); } to { opacity: 1; transform: scale(1) rotate(0); } }
+@keyframes intro-copy { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes intro-exit { to { opacity: 0; visibility: hidden; transform: scale(1.025); } }
+
+@media (max-width: 1023px) { .hero-dashboard { transform: none; } }
+
 @layer utilities {
   .font-display {
     font-family: 'Space Grotesk', sans-serif;

@@ -9,7 +9,7 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/programmes', label: 'Explore Programmes', icon: Dumbbell, end: true },
   { to: '/my-programmes', label: 'My Programmes', icon: Activity, end: false, memberOnly: true },
   { to: '/exercise-library', label: 'Exercise Library', icon: Dumbbell, end: false, adminOnly: true },

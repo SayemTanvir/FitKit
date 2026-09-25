@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import type { ReactNode } from "react";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
+import Landing from "./pages/Landing";
+import IntroReveal from "./components/IntroReveal";
 import Dashboard from "./pages/Dashboard";
 import WorkoutPlans from "./pages/WorkoutPlans";
 import Progress from "./pages/Progress";
@@ -33,12 +35,13 @@ function currentRole() {
 }
 
 function RequireRole({ role, children }: { role: 'Admin' | 'Member'; children: ReactNode }) {
-  return currentRole() === role ? children : <Navigate to="/" replace />;
+  return currentRole() === role ? children : <Navigate to="/dashboard" replace />;
 }
 
 export default function App() {
   return (
     <BrowserRouter>
+      <IntroReveal />
       <Toaster
         position="top-right"
         toastOptions={{
@@ -51,7 +54,9 @@ export default function App() {
         }}
       />
       <Routes>
+        <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Login mode="signup" />} />
 
         {/* Protected app views */}
         <Route
@@ -61,7 +66,7 @@ export default function App() {
             </RequireAuth>
           }
         >
-          <Route path="/" element={currentRole() === 'Admin' ? <AdminOverview /> : <Dashboard />} />
+          <Route path="/dashboard" element={currentRole() === 'Admin' ? <AdminOverview /> : <Dashboard />} />
           <Route path="/admin" element={<RequireRole role="Admin"><AdminOverview /></RequireRole>} />
           <Route path="/workouts" element={<WorkoutPlans />} />
           <Route path="/activity" element={<RequireRole role="Member"><Progress /></RequireRole>} />
@@ -91,7 +96,7 @@ export default function App() {
           <Route path="/profile/:userId" element={<Profile />} />
         </Route>
 
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to={localStorage.getItem('token') ? "/dashboard" : "/"} replace />} />
       </Routes>
     </BrowserRouter>
   );
