@@ -43,7 +43,7 @@ export function verifyToken(req: AuthRequest, res: Response, next: NextFunction)
       if (!state || state.expiresAt <= Date.now()) {
         const current = await query(`SELECT u.suspended_at,
           CASE WHEN a.user_id IS NOT NULL THEN 'Admin' WHEN m.user_id IS NOT NULL THEN 'Member' END AS role
-          FROM users u LEFT JOIN Admin a ON a.user_id=u.user_id LEFT JOIN Member m ON m.user_id=u.user_id WHERE u.user_id=$1`,[payload.userId]);
+          FROM users u LEFT JOIN Admin a ON a.user_id=u.user_id AND a.is_active=TRUE LEFT JOIN Member m ON m.user_id=u.user_id WHERE u.user_id=$1`,[payload.userId]);
         if (!current.rowCount || !current.rows[0].role) return res.status(401).json({ error: 'Account no longer available.' });
         state = { role: current.rows[0].role, suspended: Boolean(current.rows[0].suspended_at), expiresAt: Date.now() + ACCOUNT_CACHE_MS };
         accountStateCache.set(payload.userId, state);
@@ -58,7 +58,8 @@ export function verifyToken(req: AuthRequest, res: Response, next: NextFunction)
 
 export function requireRole(allowedRole: 'Admin' | 'Member') {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (!req.user || req.user.role !== allowedRole) {
+    const allowed = req.user && (req.user.role === allowedRole || (allowedRole === 'Member' && req.user.role === 'Admin'));
+    if (!allowed) {
       return res.status(403).json({ 
         error: `Forbidden: This operation requires the ${allowedRole} role.` 
       });

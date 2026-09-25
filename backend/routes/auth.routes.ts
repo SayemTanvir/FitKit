@@ -185,7 +185,6 @@ router.put('/me', verifyToken, async (req: AuthRequest, res: Response) => {
   const validLevel = ['Beginner', 'Intermediate', 'Advanced'].includes(fitness_level);
   const positiveNumbers = [height_cm, weight_kg].every((value) => Number(value) > 0);
   const validMemberGoals =
-    req.user!.role !== 'Member' ||
     [daily_step_goal, daily_calorie_goal, daily_hydration_goal].every(
       (value) => Number.isInteger(Number(value)) && Number(value) > 0
     );

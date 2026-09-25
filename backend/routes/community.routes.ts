@@ -43,7 +43,7 @@ async function relation(a: number,b: number) {
 router.post('/media/:purpose',raw({type:['image/jpeg','image/png','image/webp','image/gif'],limit:'3mb'}),async(req:AuthRequest,res:Response)=>{
   const purposes:Record<string,string>={avatar:'Avatar',post:'Post',programme:'Programme',exercise:'Exercise'};
   const purpose=purposes[String(req.params.purpose)]||null;
-  if(!purpose||purpose==='Post'&&req.user!.role!=='Member'||(purpose==='Programme'||purpose==='Exercise')&&req.user!.role!=='Admin')return res.status(403).json({error:'Image upload is not permitted.'});
+  if(!purpose||(purpose==='Programme'||purpose==='Exercise')&&req.user!.role!=='Admin')return res.status(403).json({error:'Image upload is not permitted.'});
   const mime=String(req.headers['content-type']||'').split(';')[0].toLowerCase();
   const data=Buffer.isBuffer(req.body)?req.body:null;
   if(!purpose||!data||data.length<1||data.length>3*1024*1024||!validImage(data,mime))return res.status(400).json({error:'Choose a JPEG, PNG, WebP or GIF image under 3 MB.'});
@@ -86,7 +86,6 @@ router.get('/members', member, async (req: AuthRequest,res: Response)=>{
       CASE WHEN mp.is_private THEN '' ELSE mp.bio END AS bio
     FROM MemberProfile mp JOIN Member m ON m.user_id=mp.user_id JOIN users u ON u.user_id=mp.user_id
     WHERE mp.user_id<>$1 AND (u.name ILIKE $2 OR mp.username ILIKE $2)
-      AND NOT EXISTS (SELECT 1 FROM Admin a WHERE a.user_id=mp.user_id)
       AND NOT EXISTS (SELECT 1 FROM UserBlock b WHERE (b.blocker_id=$1 AND b.blocked_id=mp.user_id) OR (b.blocker_id=mp.user_id AND b.blocked_id=$1))
     ORDER BY u.name LIMIT $3`,[req.user!.userId,`%${q}%`,limit]);
   return res.json(result.rows);
@@ -100,7 +99,7 @@ router.get('/members/:id', member, async (req: AuthRequest,res: Response)=>{
     (SELECT COUNT(*)::int FROM FollowRelationship WHERE follower_id=$1 AND status='Accepted') AS following,
     (SELECT COUNT(*)::int FROM SocialPost WHERE user_id=$1 AND deleted_at IS NULL) AS posts
     FROM MemberProfile mp JOIN Member m ON m.user_id=mp.user_id JOIN users u ON u.user_id=mp.user_id
-    WHERE mp.user_id=$1 AND NOT EXISTS (SELECT 1 FROM Admin a WHERE a.user_id=mp.user_id)`,[id]);
+    WHERE mp.user_id=$1`,[id]);
   if(!result.rowCount) return res.status(404).json({error:'Member not found.'});
   const rel=await relation(req.user!.userId,id);
   const allowed=id===req.user!.userId||!result.rows[0].is_private||rel?.following==='Accepted'||rel?.friendship==='Accepted';
@@ -313,7 +312,7 @@ router.post('/reports', member, async (req: AuthRequest,res: Response)=>{
     const result=await client.query('INSERT INTO ContentReport (reporter_id,target_type,target_id,reason) VALUES ($1,$2,$3,$4) RETURNING report_id',[req.user!.userId,type,targetId,reason]);
     await client.query(
       `INSERT INTO Notification (user_id,title,message,notification_type,link_path)
-       SELECT a.user_id,'New moderation report',$1,'System','/moderation' FROM Admin a`,
+       SELECT a.user_id,'New moderation report',$1,'System','/moderation' FROM Admin a WHERE a.is_active=TRUE`,
       [`${type} #${targetId} was reported and needs review.`]
     );
     await client.query('COMMIT');
@@ -329,7 +328,7 @@ router.patch('/moderation/reports/:id', requireRole('Admin'), async (req: AuthRe
 router.patch('/moderation/members/:id/suspension', requireRole('Admin'), async (req: AuthRequest,res: Response)=>{
   const id=integer(req.params.id),suspend=req.body?.suspend===true,note=String(req.body?.note||'').slice(0,2000);
   if(!id||id===req.user!.userId)return res.status(400).json({error:'Invalid member.'});
-  const client=await pool.connect();try{await client.query('BEGIN');const result=await client.query(`UPDATE users SET suspended_at=CASE WHEN $1 THEN CURRENT_TIMESTAMP ELSE NULL END WHERE user_id=$2 AND EXISTS (SELECT 1 FROM Member WHERE user_id=$2) RETURNING user_id,suspended_at`,[suspend,id]);if(!result.rowCount){await client.query('ROLLBACK');return res.status(404).json({error:'Member not found.'});}await client.query('INSERT INTO ModerationAction (admin_id,action,note) VALUES ($1,$2,$3)',[req.user!.userId,suspend?'SuspendMember':'RestoreMember',`${id}: ${note}`]);await client.query('COMMIT');clearAccountStateCache(id);return res.json(result.rows[0]);}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
+  const client=await pool.connect();try{await client.query('BEGIN');const result=await client.query(`UPDATE users SET suspended_at=CASE WHEN $1 THEN CURRENT_TIMESTAMP ELSE NULL END WHERE user_id=$2 AND EXISTS (SELECT 1 FROM Member WHERE user_id=$2) AND NOT EXISTS (SELECT 1 FROM Admin WHERE user_id=$2 AND is_active=TRUE) RETURNING user_id,suspended_at`,[suspend,id]);if(!result.rowCount){await client.query('ROLLBACK');return res.status(404).json({error:'Member not found or is an active admin.'});}await client.query('INSERT INTO ModerationAction (admin_id,action,note) VALUES ($1,$2,$3)',[req.user!.userId,suspend?'SuspendMember':'RestoreMember',`${id}: ${note}`]);await client.query('COMMIT');clearAccountStateCache(id);return res.json(result.rows[0]);}catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
 });
 
 export default router;

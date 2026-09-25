@@ -14,6 +14,7 @@ import toast from 'react-hot-toast';
 
 export default function Progress() {
   const user = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!) : null;
+  const hasMemberAccess = user?.role === 'Member' || user?.role === 'Admin';
   const [exercises, setExercises] = useState<any[]>([]);
   const [selectedEx, setSelectedEx] = useState<number>(1);
   const [quantity, setQuantity] = useState<number>(30);
@@ -30,9 +31,9 @@ export default function Progress() {
     try {
       const [exList, logList, steps, hydration] = await Promise.all([
         fetchExercises(),
-        user?.role === 'Member' ? fetchMyWorkoutLogs() : Promise.resolve([]),
-        user?.role === 'Member' ? fetchStepHistory() : Promise.resolve([]),
-        user?.role === 'Member' ? fetchHydrationHistory() : Promise.resolve([]),
+        hasMemberAccess ? fetchMyWorkoutLogs() : Promise.resolve([]),
+        hasMemberAccess ? fetchStepHistory() : Promise.resolve([]),
+        hasMemberAccess ? fetchHydrationHistory() : Promise.resolve([]),
       ]);
       if (Array.isArray(exList)) {
         setExercises(exList);
@@ -47,7 +48,7 @@ export default function Progress() {
     } finally {
       setLoading(false);
     }
-  }, [user?.role]);
+  }, [hasMemberAccess]);
 
   useEffect(() => {
     loadData();
@@ -106,17 +107,6 @@ export default function Progress() {
       toast.error(err.message);
     }
   };
-
-  if (user?.role !== 'Member') {
-    return (
-      <div className="glass rounded-2xl p-8 border border-amber-500/20">
-        <h1 className="font-display font-semibold text-2xl text-white mb-2">Member Activity Logging</h1>
-        <p className="text-slate-400 text-sm">
-          You are currently signed in with an <strong className="text-blue-400">Admin</strong> role. Workout and step logging is reserved for Member accounts.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">

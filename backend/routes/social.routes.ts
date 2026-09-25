@@ -40,8 +40,7 @@ router.get('/leaderboard', verifyToken, async (req: AuthRequest, res: Response) 
            WHERE user_id = u.user_id AND is_public = TRUE
              AND ($1::int IS NULL OR logged_at::date >= CURRENT_DATE - ($1::int - 1))
          ) w ON TRUE
-         WHERE NOT EXISTS (SELECT 1 FROM Admin a WHERE a.user_id=u.user_id)
-           AND ($2 = 'All' OR u.fitness_level = $2)
+         WHERE ($2 = 'All' OR u.fitness_level = $2)
            AND ($4 = 'all' OR u.user_id = $5 OR EXISTS (
              SELECT 1 FROM FriendRequest f
              WHERE ((f.requester_id = $5 AND f.recipient_id = u.user_id)

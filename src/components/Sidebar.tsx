@@ -10,6 +10,7 @@ interface SidebarProps {
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/admin', label: 'Admin Access', icon: Shield, end: true, adminOnly: true },
   { to: '/programmes', label: 'Explore Programmes', icon: Dumbbell, end: true },
   { to: '/my-programmes', label: 'My Programmes', icon: Activity, end: false, memberOnly: true },
   { to: '/exercise-library', label: 'Exercise Library', icon: Dumbbell, end: false, adminOnly: true },
@@ -76,7 +77,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         <p className="px-3 text-[11px] uppercase tracking-widest text-slate-500 font-semibold mb-2">Menu</p>
         {navItems.filter((item) =>
           (!('adminOnly' in item) || !item.adminOnly || userRole === 'Admin') &&
-          (!('memberOnly' in item) || !item.memberOnly || userRole === 'Member')
+          (!('memberOnly' in item) || !item.memberOnly || userRole === 'Member' || userRole === 'Admin')
         ).map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}

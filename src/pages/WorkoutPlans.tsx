@@ -244,6 +244,9 @@ export default function WorkoutPlans() {
                     <td className="py-3.5 px-4 text-slate-400">{p.curated_by}</td>
                     {user?.role === 'Admin' && (
                       <td className="py-3.5 px-4 text-right">
+                        <button type="button" onClick={() => handleStartPlan(p.plan_id)} disabled={p.is_active || !p.exercises?.length} className="mr-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 disabled:bg-emerald-500/10 disabled:text-emerald-300">
+                          {p.is_active ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}{p.is_active ? 'Active' : !p.exercises?.length ? 'Awaiting exercises' : 'Start plan'}
+                        </button>
                         <button type="button" onClick={() => setSelectedPlanId(p.plan_id)} className="mr-2 text-xs text-cyan-300 hover:text-cyan-200">Edit exercises</button>
                         <button
                           type="button"

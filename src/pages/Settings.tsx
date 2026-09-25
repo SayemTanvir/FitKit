@@ -68,7 +68,7 @@ export default function Settings() {
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if ([form.height_cm, form.weight_kg, ...(role === 'Member' ? [form.daily_step_goal, form.daily_calorie_goal, form.daily_hydration_goal] : [])].some((value) => value === '')) {
+    if ([form.height_cm, form.weight_kg, ...(['Member','Admin'].includes(role) ? [form.daily_step_goal, form.daily_calorie_goal, form.daily_hydration_goal] : [])].some((value) => value === '')) {
       toast.error('Complete all numeric fields before saving');
       return;
     }
@@ -124,7 +124,7 @@ export default function Settings() {
         </div>
       </div>
 
-      {role === 'Member' && (
+      {['Member','Admin'].includes(role) && (
         <div className="glass rounded-2xl p-6 sm:p-8">
           <div className="flex items-center gap-3 mb-6">
             <span className="w-10 h-10 rounded-xl bg-lime-400/10 text-lime-300 flex items-center justify-center"><Target className="w-5 h-5" /></span>

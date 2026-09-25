@@ -35,7 +35,8 @@ function currentRole() {
 }
 
 function RequireRole({ role, children }: { role: 'Admin' | 'Member'; children: ReactNode }) {
-  return currentRole() === role ? children : <Navigate to="/dashboard" replace />;
+  const activeRole=currentRole();
+  return activeRole === role || (role === 'Member' && activeRole === 'Admin') ? children : <Navigate to="/dashboard" replace />;
 }
 
 export default function App() {
@@ -66,7 +67,7 @@ export default function App() {
             </RequireAuth>
           }
         >
-          <Route path="/dashboard" element={currentRole() === 'Admin' ? <AdminOverview /> : <Dashboard />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/admin" element={<RequireRole role="Admin"><AdminOverview /></RequireRole>} />
           <Route path="/workouts" element={<WorkoutPlans />} />
           <Route path="/activity" element={<RequireRole role="Member"><Progress /></RequireRole>} />

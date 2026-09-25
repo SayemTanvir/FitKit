@@ -50,8 +50,8 @@ INSERT INTO users (
 ON CONFLICT (user_id) DO NOTHING;
 
 -- Subclass Assignments
-INSERT INTO Admin (user_id, admin_role, department, can_curate_plans) VALUES
-    (1, 'SuperAdmin', 'Operations', TRUE)
+INSERT INTO Admin (user_id, admin_role, department, can_curate_plans, is_active, can_manage_admins) VALUES
+    (1, 'SuperAdmin', 'Operations', TRUE, TRUE, TRUE)
 ON CONFLICT (user_id) DO NOTHING;
 
 INSERT INTO Member (user_id, daily_step_goal, is_rest_mode) VALUES

@@ -113,6 +113,7 @@ export async function loginUserService(email: string, password: string) {
          WHEN m.user_id IS NOT NULL THEN 'Member'
        END AS role,
        a.admin_role,
+       COALESCE(a.can_manage_admins,FALSE) AS can_manage_admins,
        (
          SELECT wp.title
          FROM MemberWorkoutPlan mwp
@@ -122,7 +123,7 @@ export async function loginUserService(email: string, password: string) {
          LIMIT 1
        ) AS active_plan
      FROM users u
-     LEFT JOIN Admin a ON a.user_id = u.user_id
+     LEFT JOIN Admin a ON a.user_id = u.user_id AND a.is_active=TRUE
      LEFT JOIN Member m ON m.user_id = u.user_id
      LEFT JOIN MemberProfile mp ON mp.user_id = u.user_id
      WHERE LOWER(u.email) = LOWER($1)`,
@@ -160,6 +161,7 @@ export async function loginUserService(email: string, password: string) {
       email: user.email,
       role: user.role,
       status: user.role === 'Admin' ? user.admin_role : 'Active Member',
+      can_manage_admins: user.can_manage_admins,
       active_plan: user.active_plan,
     },
   };
@@ -183,6 +185,7 @@ export async function getUserProfileService(userId: number) {
        m.daily_calorie_goal,
        m.daily_hydration_goal,
        a.admin_role,
+       COALESCE(a.can_manage_admins,FALSE) AS can_manage_admins,
        CASE WHEN a.user_id IS NOT NULL THEN 'Admin' ELSE 'Member' END AS role,
        COALESCE(rank_info.rank_name, 'Bronze') AS membership_rank,
        EXTRACT(YEAR FROM AGE(CURRENT_DATE, u.created_at::DATE))::int AS membership_years,
@@ -199,7 +202,7 @@ export async function getUserProfileService(userId: number) {
          LIMIT 1
        ) AS active_plan
      FROM users u
-     LEFT JOIN Admin a ON a.user_id = u.user_id
+     LEFT JOIN Admin a ON a.user_id = u.user_id AND a.is_active=TRUE
      LEFT JOIN Member m ON m.user_id = u.user_id
      LEFT JOIN MemberProfile mp ON mp.user_id = u.user_id
      LEFT JOIN LATERAL (
@@ -263,7 +266,7 @@ export async function updateUserProfileService(
     ]
   );
 
-  if (role === 'Member') {
+  if (role === 'Member' || role === 'Admin') {
     await query(
       `UPDATE Member
        SET daily_step_goal = $1,

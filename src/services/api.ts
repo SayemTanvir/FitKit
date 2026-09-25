@@ -32,6 +32,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 export const setMyPhoto=(photo_url:string)=>request<{photo_url:string}>('/auth/me/photo',{method:'PUT',headers:getAuthHeaders(),body:JSON.stringify({photo_url})});
 export const removeMyPhoto=()=>request<{photo_url:null}>('/auth/me/photo',{method:'DELETE',headers:getAuthHeaders()});
 
+export type RoleAssignment={user_id:number;name:string;email:string;role:'Admin'|'Member';can_manage_admins:boolean;suspended_at:string|null};
+export const fetchRoleAssignments=()=>request<RoleAssignment[]>('/admin/role-assignments',{headers:getAuthHeaders()});
+export const promoteMember=(id:number)=>request<{message:string}>(`/admin/admins/${id}`,{method:'POST',headers:getAuthHeaders()});
+export const demoteAdmin=(id:number)=>request<{message:string}>(`/admin/admins/${id}`,{method:'DELETE',headers:getAuthHeaders()});
+
 export async function loginUser(credentials: { email: string; password: string }) {
   return request<any>('/auth/login', {
     method: 'POST',

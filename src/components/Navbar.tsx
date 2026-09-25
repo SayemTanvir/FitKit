@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Menu, Bell, LogOut, Trash2 } from 'lucide-react';
 import { deleteNotification, notifications as fetchCommunityNotifications, readNotification } from '../services/community';
 import UserAvatar from './UserAvatar';
+import { fetchMyProfile } from '../services/api';
 
 interface NavbarProps {
   onMenuClick: () => void;
@@ -43,6 +44,13 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
       window.removeEventListener('fitkit_profile_photo_changed', handleUserUpdate);
     };
   }, []);
+  useEffect(()=>{
+    fetchMyProfile().then((data)=>{
+      const refreshed={...(readStoredUser()||{}),...data.user};
+      localStorage.setItem('user',JSON.stringify(refreshed));
+      setUser(refreshed);
+    }).catch(()=>{});
+  },[]);
   useEffect(() => {
     refreshNotifications();
     const timer = window.setInterval(refreshNotifications, 15000);
@@ -54,6 +62,7 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
   }, [refreshNotifications]);
   // Multi-tier check for Admin status
   const isAdmin = user?.role === 'Admin';
+  const isHeadCurator = isAdmin && Boolean(user?.can_manage_admins);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -105,11 +114,11 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
                   : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
               }`}
             >
-              {isAdmin ? 'Head Curator' : 'Active Member'}
+              {isHeadCurator ? 'Head Curator' : isAdmin ? 'Admin' : 'Active Member'}
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 hidden sm:block">
-            {isAdmin ? 'System Administrator Portal' : "Here's how your training is tracking today."}
+            {isHeadCurator ? 'System Administrator Portal' : isAdmin ? 'Member account with administrator access' : "Here's how your training is tracking today."}
           </p>
         </div>
 

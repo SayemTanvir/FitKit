@@ -70,6 +70,8 @@ CREATE TABLE Admin (
     admin_role VARCHAR(50) NOT NULL,
     department VARCHAR(50),
     can_curate_plans BOOLEAN NOT NULL DEFAULT TRUE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    can_manage_admins BOOLEAN NOT NULL DEFAULT FALSE,
     CONSTRAINT fk_admin_user
         FOREIGN KEY (user_id)
         REFERENCES users(user_id)

@@ -17,7 +17,7 @@ function ActivityItem({ activity }: { activity: SocialActivity }) {
   const [counts,setCounts]=useState(initial);
   const [active,setActive]=useState<ReactionType|null>(reactions.find(([,emoji])=>emoji===activity.activeReaction)?.[0]||null);
   const [saving,setSaving]=useState(false);
-  let member=false;try{member=JSON.parse(localStorage.getItem('user')||'{}').role==='Member';}catch{ /* signed-out fallback */ }
+  let member=false;try{member=['Member','Admin'].includes(JSON.parse(localStorage.getItem('user')||'{}').role);}catch{ /* signed-out fallback */ }
   const toggle=async(type:ReactionType)=>{
     if(!member||saving)return;
     setSaving(true);
