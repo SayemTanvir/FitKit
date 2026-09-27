@@ -5,18 +5,35 @@
 INSERT INTO Region (region_id, region_name) VALUES
     (1, 'Asia'),
     (2, 'Americas'),
-    (3, 'Europe')
+    (3, 'Europe'),
+    (4, 'Africa'),
+    (5, 'Oceania')
 ON CONFLICT (region_id) DO NOTHING;
 
 INSERT INTO Country (country_id, country_name, region_id) VALUES
     ('BD', 'Bangladesh', 1),
     ('US', 'United States', 2),
-    ('UK', 'United Kingdom', 3)
+    ('UK', 'United Kingdom', 3),
+    ('CA', 'Canada', 2),
+    ('AU', 'Australia', 5),
+    ('JP', 'Japan', 1),
+    ('DE', 'Germany', 3),
+    ('BR', 'Brazil', 2),
+    ('IN', 'India', 1),
+    ('ZA', 'South Africa', 4)
 ON CONFLICT (country_id) DO NOTHING;
 
 INSERT INTO Address (address_id, street_address, city, state_province, postal_code, country_id) VALUES
     (1, 'Polashi', 'Dhaka', 'Dhaka Division', '1205', 'BD'),
-    (2, '742 Evergreen Terrace', 'Springfield', 'Oregon', '97477', 'US')
+    (2, '742 Evergreen Terrace', 'Springfield', 'Oregon', '97477', 'US'),
+    (3, '18 King Street', 'Manchester', 'Greater Manchester', 'M2 6AG', 'UK'),
+    (4, '120 Harbour Street', 'Toronto', 'Ontario', 'M5J 2L9', 'CA'),
+    (5, '44 George Street', 'Sydney', 'New South Wales', '2000', 'AU'),
+    (6, '3-5-1 Marunouchi', 'Tokyo', 'Tokyo', '100-0005', 'JP'),
+    (7, '27 Alexanderplatz', 'Berlin', 'Berlin', '10178', 'DE'),
+    (8, '155 Avenida Paulista', 'Sao Paulo', 'Sao Paulo', '01310-200', 'BR'),
+    (9, '42 MG Road', 'Bengaluru', 'Karnataka', '560001', 'IN'),
+    (10, '81 Long Street', 'Cape Town', 'Western Cape', '8001', 'ZA')
 ON CONFLICT (address_id) DO NOTHING;
 
 -- 2. Membership Ranks
@@ -56,6 +73,63 @@ ON CONFLICT (user_id) DO NOTHING;
 
 INSERT INTO Member (user_id, daily_step_goal, is_rest_mode) VALUES
     (2, 10000, FALSE)
+ON CONFLICT (user_id) DO NOTHING;
+
+-- Explicit IDs above do not advance PostgreSQL sequences.
+SELECT setval('users_user_id_seq', (SELECT MAX(user_id) FROM users));
+
+-- 100 deterministic demo members. Their local email part is also their
+-- community username; every account uses the password "12345678".
+WITH demo AS (
+    SELECT
+        n,
+        first_names[((n - 1) % array_length(first_names, 1)) + 1] AS first_name,
+        last_names[(((n - 1) / array_length(first_names, 1))::INT % array_length(last_names, 1)) + 1] AS last_name,
+        country_codes[((n - 1) % array_length(country_codes, 1)) + 1] AS country_id
+    FROM generate_series(1, 100) AS series(n)
+    CROSS JOIN (SELECT ARRAY[
+        'Aisha','Liam','Sofia','Noah','Maya','Ethan','Priya','Lucas','Hana','Oliver',
+        'Nadia','Mateo','Emma','Arif','Chloe','Daniel','Yuki','Amara','Leo','Fatima'
+    ]::TEXT[] AS first_names) f
+    CROSS JOIN (SELECT ARRAY[
+        'Rahman','Carter','Silva','Ahmed','Patel','Kim','Tanaka','Muller','Smith','Khan',
+        'Brown','Sato','Wilson','Garcia','Das','Martin','Ali','Johnson','Naidoo','Roy'
+    ]::TEXT[] AS last_names) l
+    CROSS JOIN (SELECT ARRAY['BD','US','UK','CA','AU','JP','DE','BR','IN','ZA']::CHAR(2)[] AS country_codes) c
+)
+INSERT INTO users (
+    name, email, password_hash, phone_no, gender, birth_date, height_cm,
+    weight_kg, fitness_level, primary_goal, country_id, default_privacy,
+    address_id, address_type, created_at
+)
+SELECT
+    first_name || ' ' || last_name,
+    LOWER(first_name || '.' || last_name || LPAD(n::TEXT, 3, '0') || '@fitkit.com'),
+    '$2b$10$dYTMSr/fWUU63II61XowouX1lBr5.08Qh06bC7PjbUaJ7O2RUOisS',
+    '+8801' || LPAD((700000000 + n)::TEXT, 9, '0'),
+    CASE WHEN n % 2 = 0 THEN 'Male' ELSE 'Female' END,
+    (DATE '1984-01-01' + ((n * 173) % 7300))::DATE,
+    (150 + (n * 7 % 46))::NUMERIC(5,2),
+    (48 + (n * 11 % 53))::NUMERIC(5,2),
+    (ARRAY['Beginner','Intermediate','Advanced'])[((n - 1) % 3) + 1],
+    (ARRAY['Weight Loss','Muscle Gain','Strength','Flexibility','General Fitness'])[((n - 1) % 5) + 1],
+    country_id,
+    (ARRAY['Public','Friends','Private'])[((n - 1) % 3) + 1],
+    ((n - 1) % 10) + 1,
+    (ARRAY['Home','Work','Gym'])[((n - 1) % 3) + 1],
+    CURRENT_TIMESTAMP - ((30 + n * 12) || ' days')::INTERVAL
+FROM demo
+ON CONFLICT (email) DO NOTHING;
+
+INSERT INTO Member (user_id, daily_step_goal, daily_calorie_goal, daily_hydration_goal, is_rest_mode)
+SELECT
+    user_id,
+    6000 + (user_id % 9) * 1000,
+    500 + (user_id % 8) * 100,
+    1800 + (user_id % 9) * 200,
+    user_id % 17 = 0
+FROM users
+WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
 ON CONFLICT (user_id) DO NOTHING;
 
 -- Sync Sequence Counters
@@ -109,6 +183,16 @@ INSERT INTO MemberWorkoutPlan (user_id, plan_id, start_date, status) VALUES
     (2, 1, CURRENT_DATE, 'Active')
 ON CONFLICT (user_id, plan_id) DO NOTHING;
 
+INSERT INTO MemberWorkoutPlan (user_id, plan_id, start_date, status)
+SELECT
+    u.user_id,
+    1 + (u.user_id % 3),
+    CURRENT_DATE - (20 + u.user_id % 180),
+    (ARRAY['Active','Completed','Abandoned'])[(u.user_id % 3) + 1]
+FROM users u
+WHERE u.email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+ON CONFLICT (user_id, plan_id) DO NOTHING;
+
 SELECT setval('WorkoutPlan_plan_id_seq', (SELECT MAX(plan_id) FROM WorkoutPlan));
 
 -- 6. Achievements
@@ -123,3 +207,87 @@ SELECT setval('Achievement_achievement_id_seq', (SELECT MAX(achievement_id) FROM
 INSERT INTO MemberAchievement (user_id, achievement_id, earned_date) VALUES
     (2, 1, CURRENT_TIMESTAMP)
 ON CONFLICT (user_id, achievement_id) DO NOTHING;
+
+-- Historical data: twelve weekly workouts plus thirty days of step and
+-- hydration records per demo member. NOT EXISTS guards keep this rerunnable.
+INSERT INTO WorkoutEntry (user_id, exercise_id, logged_at, quantity, is_public)
+SELECT
+    u.user_id,
+    1 + ((u.user_id + history.week_no) % 5),
+    CURRENT_TIMESTAMP - ((history.week_no * 7 + u.user_id % 6) || ' days')::INTERVAL,
+    8 + ((u.user_id * 3 + history.week_no * 5) % 43),
+    (u.user_id + history.week_no) % 3 = 0
+FROM users u
+CROSS JOIN generate_series(1, 12) AS history(week_no)
+WHERE u.email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+  AND NOT EXISTS (
+      SELECT 1 FROM WorkoutEntry existing
+      WHERE existing.user_id = u.user_id
+        AND existing.logged_at::DATE = (CURRENT_DATE - (history.week_no * 7 + u.user_id % 6))
+        AND existing.exercise_id = 1 + ((u.user_id + history.week_no) % 5)
+  );
+
+INSERT INTO StepEntry (user_id, logged_at, steps_added, is_public)
+SELECT
+    u.user_id,
+    CURRENT_TIMESTAMP - (history.day_no || ' days')::INTERVAL,
+    3500 + ((u.user_id * 613 + history.day_no * 977) % 12501),
+    (u.user_id + history.day_no) % 4 = 0
+FROM users u
+CROSS JOIN generate_series(1, 30) AS history(day_no)
+WHERE u.email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+  AND NOT EXISTS (
+      SELECT 1 FROM StepEntry existing
+      WHERE existing.user_id = u.user_id
+        AND existing.logged_at::DATE = CURRENT_DATE - history.day_no
+  );
+
+INSERT INTO HydrationEntry (user_id, logged_at, amount_ml, is_public)
+SELECT
+    u.user_id,
+    CURRENT_TIMESTAMP - (history.day_no || ' days')::INTERVAL,
+    1200 + ((u.user_id * 137 + history.day_no * 211) % 2601),
+    FALSE
+FROM users u
+CROSS JOIN generate_series(1, 30) AS history(day_no)
+WHERE u.email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+  AND NOT EXISTS (
+      SELECT 1 FROM HydrationEntry existing
+      WHERE existing.user_id = u.user_id
+        AND existing.logged_at::DATE = CURRENT_DATE - history.day_no
+  );
+
+INSERT INTO MemberAchievement (user_id, achievement_id, earned_date)
+SELECT
+    u.user_id,
+    achievement.achievement_id,
+    CURRENT_TIMESTAMP - ((u.user_id % 90 + achievement.achievement_id * 3) || ' days')::INTERVAL
+FROM users u
+JOIN Achievement achievement ON achievement.achievement_id <= 1 + (u.user_id % 3)
+WHERE u.email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+ON CONFLICT (user_id, achievement_id) DO NOTHING;
+
+WITH ranked AS (
+    SELECT user_id, ROW_NUMBER() OVER (ORDER BY email) AS position
+    FROM users
+    WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+), pairs AS (
+    SELECT
+        member.user_id,
+        friend.user_id AS friend_id,
+        CASE WHEN member.position % 6 = 0 THEN 'Pending' ELSE 'Accepted' END AS status,
+        member.position
+    FROM ranked member
+    JOIN ranked friend ON friend.position = (member.position % 100) + 1
+)
+INSERT INTO Friendship (user_id, friend_id, status, since_date)
+SELECT user_id, friend_id, status, CURRENT_TIMESTAMP - ((position * 4) || ' days')::INTERVAL
+FROM pairs
+ON CONFLICT DO NOTHING;
+
+SELECT setval('users_user_id_seq', (SELECT MAX(user_id) FROM users));
+SELECT setval('WorkoutEntry_entry_id_seq', (SELECT MAX(entry_id) FROM WorkoutEntry));
+SELECT setval('StepEntry_step_entry_id_seq', (SELECT MAX(step_entry_id) FROM StepEntry));
+SELECT setval('HydrationEntry_hydration_id_seq', (SELECT MAX(hydration_id) FROM HydrationEntry));
+SELECT setval('ActivityFeed_feed_id_seq', (SELECT MAX(feed_id) FROM ActivityFeed));
+SELECT setval('Notification_notification_id_seq', (SELECT MAX(notification_id) FROM Notification));

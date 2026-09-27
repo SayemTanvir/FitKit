@@ -10,14 +10,21 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMP;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS country_id CHAR(2) REFERENCES Country(country_id) ON DELETE SET NULL;
 ALTER TABLE Admin ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE Admin ADD COLUMN IF NOT EXISTS can_manage_admins BOOLEAN NOT NULL DEFAULT FALSE;
-INSERT INTO Region (region_name) VALUES ('Asia'), ('Americas'), ('Europe')
+INSERT INTO Region (region_name) VALUES ('Asia'), ('Americas'), ('Europe'), ('Africa'), ('Oceania')
 ON CONFLICT (region_name) DO NOTHING;
 INSERT INTO Country (country_id, country_name, region_id)
 SELECT defaults.country_id, defaults.country_name, region.region_id
 FROM (VALUES
     ('BD', 'Bangladesh', 'Asia'),
     ('US', 'United States', 'Americas'),
-    ('UK', 'United Kingdom', 'Europe')
+    ('UK', 'United Kingdom', 'Europe'),
+    ('CA', 'Canada', 'Americas'),
+    ('AU', 'Australia', 'Oceania'),
+    ('JP', 'Japan', 'Asia'),
+    ('DE', 'Germany', 'Europe'),
+    ('BR', 'Brazil', 'Americas'),
+    ('IN', 'India', 'Asia'),
+    ('ZA', 'South Africa', 'Africa')
 ) AS defaults(country_id, country_name, region_name)
 JOIN Region region ON region.region_name = defaults.region_name
 ON CONFLICT (country_id) DO NOTHING;
@@ -403,41 +410,112 @@ CREATE TABLE IF NOT EXISTS ModerationAction (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Clearly fictional, repeatable community demo accounts and posts.
-INSERT INTO users (name,email,password_hash,gender,birth_date,height_cm,weight_kg,fitness_level,primary_goal)
-SELECT demo.name,demo.email,seed.password_hash,demo.gender,demo.birth_date::date,demo.height_cm,demo.weight_kg,demo.fitness_level,demo.primary_goal
-FROM users seed CROSS JOIN (VALUES
-  ('Demo Coach','coach.demo@fitkit.test','Female','1994-04-12',168,64,'Advanced','Strength'),
-  ('Demo Runner','runner.demo@fitkit.test','Male','1998-07-21',176,72,'Intermediate','Endurance')
-) AS demo(name,email,gender,birth_date,height_cm,weight_kg,fitness_level,primary_goal)
-WHERE seed.email='member@fitkit.com'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO Member (user_id) SELECT user_id FROM users WHERE email IN ('coach.demo@fitkit.test','runner.demo@fitkit.test') ON CONFLICT (user_id) DO NOTHING;
-INSERT INTO MemberProfile (user_id,username,bio,interests,is_private,dm_policy)
-SELECT user_id,CASE WHEN email='coach.demo@fitkit.test' THEN 'demo_coach' ELSE 'demo_runner' END,
-       CASE WHEN email='coach.demo@fitkit.test' THEN 'Fictional coach demo account: building consistent strength.' ELSE 'Fictional runner demo account: tracking steady progress.' END,
-       CASE WHEN email='coach.demo@fitkit.test' THEN ARRAY['strength','hypertrophy'] ELSE ARRAY['running','endurance'] END,
-       FALSE,'Everyone'
-FROM users WHERE email IN ('coach.demo@fitkit.test','runner.demo@fitkit.test')
-ON CONFLICT (user_id) DO NOTHING;
-INSERT INTO SocialPost (user_id,body,visibility)
-SELECT user_id,'Demo post: week one is about controlled technique and repeatable effort.','Public'
-FROM users WHERE email='coach.demo@fitkit.test'
-  AND NOT EXISTS (SELECT 1 FROM SocialPost p WHERE p.user_id=users.user_id AND p.body LIKE 'Demo post: week one%');
-INSERT INTO SocialPost (user_id,body,visibility)
-SELECT user_id,'Demo post: an easy run still counts toward a stronger endurance base.','Public'
-FROM users WHERE email='runner.demo@fitkit.test'
-  AND NOT EXISTS (SELECT 1 FROM SocialPost p WHERE p.user_id=users.user_id AND p.body LIKE 'Demo post: an easy run%');
-INSERT INTO FollowRelationship (follower_id,followed_id,status)
-SELECT runner.user_id,coach.user_id,'Accepted'
-FROM users runner CROSS JOIN users coach
-WHERE runner.email='runner.demo@fitkit.test' AND coach.email='coach.demo@fitkit.test'
+-- Enrich the 100 core demo members with repeatable community history.
+UPDATE MemberProfile profile
+SET username = split_part(users.email, '@', 1),
+    bio = 'Training consistently for ' || LOWER(users.primary_goal) || '.',
+    interests = CASE users.primary_goal
+        WHEN 'Weight Loss' THEN ARRAY['cardio','nutrition','habits']
+        WHEN 'Muscle Gain' THEN ARRAY['hypertrophy','strength','recovery']
+        WHEN 'Strength' THEN ARRAY['strength','powerlifting','mobility']
+        WHEN 'Flexibility' THEN ARRAY['mobility','yoga','recovery']
+        ELSE ARRAY['wellness','fitness','consistency']
+    END,
+    is_private = users.default_privacy = 'Private',
+    dm_policy = CASE users.default_privacy WHEN 'Public' THEN 'Everyone' ELSE 'Friends' END,
+    updated_at = CURRENT_TIMESTAMP
+FROM users
+WHERE profile.user_id = users.user_id
+  AND users.email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$';
+
+INSERT INTO SocialPost (user_id, body, visibility, created_at, updated_at)
+SELECT
+    users.user_id,
+    messages.body,
+    CASE users.default_privacy
+        WHEN 'Public' THEN 'Public'
+        WHEN 'Friends' THEN 'Friends'
+        ELSE 'Private'
+    END,
+    CURRENT_TIMESTAMP - ((7 + users.user_id % 75) || ' days')::INTERVAL,
+    CURRENT_TIMESTAMP - ((7 + users.user_id % 75) || ' days')::INTERVAL
+FROM users
+CROSS JOIN LATERAL (SELECT (ARRAY[
+    'Finished a steady workout and kept every rep controlled.',
+    'Hit my step goal today. Small choices really add up.',
+    'Recovery day: mobility, water, and an early night.',
+    'Added a little more volume without sacrificing form.',
+    'A short session was better than skipping the day.',
+    'Feeling stronger after another consistent week.',
+    'Tried a new warm-up and moved much better today.',
+    'Progress is slow, measurable, and worth celebrating.'
+])[1 + users.user_id % 8] AS body) messages
+WHERE users.email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+  AND NOT EXISTS (
+      SELECT 1 FROM SocialPost existing
+      WHERE existing.user_id = users.user_id AND existing.body = messages.body
+  );
+
+WITH ranked AS (
+    SELECT user_id, ROW_NUMBER() OVER (ORDER BY email) AS position
+    FROM users
+    WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+)
+INSERT INTO FollowRelationship (follower_id, followed_id, status, created_at)
+SELECT follower.user_id, followed.user_id, 'Accepted',
+       CURRENT_TIMESTAMP - ((follower.position * 2) || ' days')::INTERVAL
+FROM ranked follower
+JOIN ranked followed ON followed.position IN (
+    (follower.position % 100) + 1,
+    ((follower.position + 6) % 100) + 1
+)
 ON CONFLICT DO NOTHING;
-INSERT INTO FriendRequest (requester_id,recipient_id,status)
-SELECT coach.user_id,runner.user_id,'Accepted'
-FROM users coach CROSS JOIN users runner
-WHERE coach.email='coach.demo@fitkit.test' AND runner.email='runner.demo@fitkit.test'
+
+WITH ranked_posts AS (
+    SELECT post_id, user_id, ROW_NUMBER() OVER (ORDER BY created_at, post_id) AS position
+    FROM SocialPost
+    WHERE user_id IN (
+        SELECT user_id FROM users
+        WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+    )
+), ranked_users AS (
+    SELECT user_id, ROW_NUMBER() OVER (ORDER BY email) AS position
+    FROM users
+    WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+)
+INSERT INTO PostLike (post_id, user_id, created_at)
+SELECT post.post_id, liker.user_id,
+       CURRENT_TIMESTAMP - ((post.position % 30) || ' days')::INTERVAL
+FROM ranked_posts post
+JOIN ranked_users liker ON liker.position = (post.position % 100) + 1
+WHERE liker.user_id <> post.user_id
 ON CONFLICT DO NOTHING;
+
+WITH ranked_posts AS (
+    SELECT post_id, user_id, ROW_NUMBER() OVER (ORDER BY created_at, post_id) AS position
+    FROM SocialPost
+    WHERE user_id IN (
+        SELECT user_id FROM users
+        WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+    )
+), ranked_users AS (
+    SELECT user_id, ROW_NUMBER() OVER (ORDER BY email) AS position
+    FROM users
+    WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+)
+INSERT INTO PostComment (post_id, user_id, body, created_at)
+SELECT post.post_id, commenter.user_id, 'Great work - keep the momentum going!',
+       CURRENT_TIMESTAMP - ((post.position % 20) || ' days')::INTERVAL
+FROM ranked_posts post
+JOIN ranked_users commenter ON commenter.position = ((post.position + 10) % 100) + 1
+WHERE post.position % 3 = 0
+  AND commenter.user_id <> post.user_id
+  AND NOT EXISTS (
+      SELECT 1 FROM PostComment existing
+      WHERE existing.post_id = post.post_id
+        AND existing.user_id = commenter.user_id
+        AND existing.body = 'Great work - keep the momentum going!'
+  );
 
 -- A two-week, three-day programme with explicit per-week progression.
 INSERT INTO TrainingProgramme (admin_id,name,description,goal,difficulty,duration_weeks,days_per_week,session_minutes,environment,equipment,audience,target_muscles,tags)

@@ -7,6 +7,7 @@
 \ir views.sql
 \ir insert.sql
 \ir platform.sql
+\ir demo_users.sql
 \ir procedures.sql
 
 SELECT 'FitKit database setup complete.' AS status;

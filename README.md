@@ -61,14 +61,23 @@ The API requires `JWT_SECRET`; set a long, unique value. `WEB_ORIGIN` controls t
 
 ## Demo accounts
 
-Both seeded accounts use the password `Password@123`.
+The original admin and member accounts use the password `Password@123`.
+
+The seed also creates 100 varied demo members with usernames such as
+`aisha.rahman001@fitkit.com`. Every one of these demo members uses the password
+`12345678`. They include historical workouts, steps, hydration, achievements,
+plan assignments, friendships, profiles, posts, follows, likes and comments
+across 10 countries.
 
 | Role | Email |
 | --- | --- |
 | Admin | `admin@fitkit.com` |
 | Member | `member@fitkit.com` |
 
-The platform migration also adds clearly fictional demo members and a two-week training programme. The fictional accounts use the seeded demo password; change or remove them before any non-demo deployment. The seed is repeatable and does not overwrite an existing user with the same email.
+The platform migration enriches the seeded demo members with community data and
+adds a two-week training programme. Change or remove demo credentials before any
+non-demo deployment. The seed is repeatable and does not overwrite an existing
+user with the same email.
 
 ## Database files
 
