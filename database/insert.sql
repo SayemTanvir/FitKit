@@ -104,7 +104,7 @@ INSERT INTO users (
 )
 SELECT
     first_name || ' ' || last_name,
-    LOWER(first_name || '.' || last_name || LPAD(n::TEXT, 3, '0') || '@fitkit.com'),
+    LOWER(first_name || (1 + ((n - 1) / 20)::INT)::TEXT || '@fitkit.com'),
     '$2b$10$dYTMSr/fWUU63II61XowouX1lBr5.08Qh06bC7PjbUaJ7O2RUOisS',
     '+8801' || LPAD((700000000 + n)::TEXT, 9, '0'),
     CASE WHEN n % 2 = 0 THEN 'Male' ELSE 'Female' END,
@@ -129,7 +129,7 @@ SELECT
     1800 + (user_id % 9) * 200,
     user_id % 17 = 0
 FROM users
-WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+WHERE email ~ '^[a-z]+[1-5]@fitkit\.com$'
 ON CONFLICT (user_id) DO NOTHING;
 
 -- Sync Sequence Counters
@@ -190,7 +190,7 @@ SELECT
     CURRENT_DATE - (20 + u.user_id % 180),
     (ARRAY['Active','Completed','Abandoned'])[(u.user_id % 3) + 1]
 FROM users u
-WHERE u.email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+WHERE u.email ~ '^[a-z]+[1-5]@fitkit\.com$'
 ON CONFLICT (user_id, plan_id) DO NOTHING;
 
 SELECT setval('WorkoutPlan_plan_id_seq', (SELECT MAX(plan_id) FROM WorkoutPlan));
@@ -219,7 +219,7 @@ SELECT
     (u.user_id + history.week_no) % 3 = 0
 FROM users u
 CROSS JOIN generate_series(1, 12) AS history(week_no)
-WHERE u.email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+WHERE u.email ~ '^[a-z]+[1-5]@fitkit\.com$'
   AND NOT EXISTS (
       SELECT 1 FROM WorkoutEntry existing
       WHERE existing.user_id = u.user_id
@@ -235,7 +235,7 @@ SELECT
     (u.user_id + history.day_no) % 4 = 0
 FROM users u
 CROSS JOIN generate_series(1, 30) AS history(day_no)
-WHERE u.email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+WHERE u.email ~ '^[a-z]+[1-5]@fitkit\.com$'
   AND NOT EXISTS (
       SELECT 1 FROM StepEntry existing
       WHERE existing.user_id = u.user_id
@@ -250,7 +250,7 @@ SELECT
     FALSE
 FROM users u
 CROSS JOIN generate_series(1, 30) AS history(day_no)
-WHERE u.email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+WHERE u.email ~ '^[a-z]+[1-5]@fitkit\.com$'
   AND NOT EXISTS (
       SELECT 1 FROM HydrationEntry existing
       WHERE existing.user_id = u.user_id
@@ -264,13 +264,13 @@ SELECT
     CURRENT_TIMESTAMP - ((u.user_id % 90 + achievement.achievement_id * 3) || ' days')::INTERVAL
 FROM users u
 JOIN Achievement achievement ON achievement.achievement_id <= 1 + (u.user_id % 3)
-WHERE u.email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+WHERE u.email ~ '^[a-z]+[1-5]@fitkit\.com$'
 ON CONFLICT (user_id, achievement_id) DO NOTHING;
 
 WITH ranked AS (
     SELECT user_id, ROW_NUMBER() OVER (ORDER BY email) AS position
     FROM users
-    WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+    WHERE email ~ '^[a-z]+[1-5]@fitkit\.com$'
 ), pairs AS (
     SELECT
         member.user_id,

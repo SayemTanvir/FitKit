@@ -64,7 +64,7 @@ The API requires `JWT_SECRET`; set a long, unique value. `WEB_ORIGIN` controls t
 The original admin and member accounts use the password `Password@123`.
 
 The seed also creates 100 varied demo members with usernames such as
-`aisha.rahman001@fitkit.com`. Every one of these demo members uses the password
+`aisha1@fitkit.com`. Every one of these demo members uses the password
 `12345678`. They include historical workouts, steps, hydration, achievements,
 plan assignments, friendships, profiles, posts, follows, likes and comments
 across 10 countries.

@@ -426,7 +426,7 @@ SET username = split_part(users.email, '@', 1),
     updated_at = CURRENT_TIMESTAMP
 FROM users
 WHERE profile.user_id = users.user_id
-  AND users.email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$';
+  AND users.email ~ '^[a-z]+[1-5]@fitkit\.com$';
 
 INSERT INTO SocialPost (user_id, body, visibility, created_at, updated_at)
 SELECT
@@ -450,7 +450,7 @@ CROSS JOIN LATERAL (SELECT (ARRAY[
     'Tried a new warm-up and moved much better today.',
     'Progress is slow, measurable, and worth celebrating.'
 ])[1 + users.user_id % 8] AS body) messages
-WHERE users.email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+WHERE users.email ~ '^[a-z]+[1-5]@fitkit\.com$'
   AND NOT EXISTS (
       SELECT 1 FROM SocialPost existing
       WHERE existing.user_id = users.user_id AND existing.body = messages.body
@@ -459,7 +459,7 @@ WHERE users.email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
 WITH ranked AS (
     SELECT user_id, ROW_NUMBER() OVER (ORDER BY email) AS position
     FROM users
-    WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+    WHERE email ~ '^[a-z]+[1-5]@fitkit\.com$'
 )
 INSERT INTO FollowRelationship (follower_id, followed_id, status, created_at)
 SELECT follower.user_id, followed.user_id, 'Accepted',
@@ -476,12 +476,12 @@ WITH ranked_posts AS (
     FROM SocialPost
     WHERE user_id IN (
         SELECT user_id FROM users
-        WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+        WHERE email ~ '^[a-z]+[1-5]@fitkit\.com$'
     )
 ), ranked_users AS (
     SELECT user_id, ROW_NUMBER() OVER (ORDER BY email) AS position
     FROM users
-    WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+    WHERE email ~ '^[a-z]+[1-5]@fitkit\.com$'
 )
 INSERT INTO PostLike (post_id, user_id, created_at)
 SELECT post.post_id, liker.user_id,
@@ -496,12 +496,12 @@ WITH ranked_posts AS (
     FROM SocialPost
     WHERE user_id IN (
         SELECT user_id FROM users
-        WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+        WHERE email ~ '^[a-z]+[1-5]@fitkit\.com$'
     )
 ), ranked_users AS (
     SELECT user_id, ROW_NUMBER() OVER (ORDER BY email) AS position
     FROM users
-    WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+    WHERE email ~ '^[a-z]+[1-5]@fitkit\.com$'
 )
 INSERT INTO PostComment (post_id, user_id, body, created_at)
 SELECT post.post_id, commenter.user_id, 'Great work - keep the momentum going!',

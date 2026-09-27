@@ -3,6 +3,31 @@
 
 SELECT setval('users_user_id_seq', COALESCE((SELECT MAX(user_id) FROM users), 1));
 
+-- Rename accounts created by the earlier first.lastNNN convention without
+-- changing their IDs or any related history.
+WITH email_mapping AS (
+    SELECT
+        LOWER(first_names[((n - 1) % array_length(first_names, 1)) + 1]
+              || '.' || last_names[(((n - 1) / array_length(first_names, 1))::INT % array_length(last_names, 1)) + 1]
+              || LPAD(n::TEXT, 3, '0') || '@fitkit.com') AS old_email,
+        LOWER(first_names[((n - 1) % array_length(first_names, 1)) + 1]
+              || (1 + ((n - 1) / array_length(first_names, 1))::INT)::TEXT
+              || '@fitkit.com') AS new_email
+    FROM generate_series(1, 100) AS series(n)
+    CROSS JOIN (SELECT ARRAY[
+        'Aisha','Liam','Sofia','Noah','Maya','Ethan','Priya','Lucas','Hana','Oliver',
+        'Nadia','Mateo','Emma','Arif','Chloe','Daniel','Yuki','Amara','Leo','Fatima'
+    ]::TEXT[] AS first_names) f
+    CROSS JOIN (SELECT ARRAY[
+        'Rahman','Carter','Silva','Ahmed','Patel','Kim','Tanaka','Muller','Smith','Khan',
+        'Brown','Sato','Wilson','Garcia','Das','Martin','Ali','Johnson','Naidoo','Roy'
+    ]::TEXT[] AS last_names) l
+)
+UPDATE users
+SET email = email_mapping.new_email
+FROM email_mapping
+WHERE LOWER(users.email) = email_mapping.old_email;
+
 WITH demo AS (
     SELECT
         n,
@@ -26,7 +51,7 @@ INSERT INTO users (
 )
 SELECT
     first_name || ' ' || last_name,
-    LOWER(first_name || '.' || last_name || LPAD(n::TEXT, 3, '0') || '@fitkit.com'),
+    LOWER(first_name || (1 + ((n - 1) / 20)::INT)::TEXT || '@fitkit.com'),
     '$2b$10$dYTMSr/fWUU63II61XowouX1lBr5.08Qh06bC7PjbUaJ7O2RUOisS',
     '+8801' || LPAD((700000000 + n)::TEXT, 9, '0'),
     CASE WHEN n % 2 = 0 THEN 'Male' ELSE 'Female' END,
@@ -45,12 +70,12 @@ INSERT INTO Member (user_id, daily_step_goal, daily_calorie_goal, daily_hydratio
 SELECT user_id, 6000 + (user_id % 9) * 1000, 500 + (user_id % 8) * 100,
        1800 + (user_id % 9) * 200, user_id % 17 = 0
 FROM users
-WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+WHERE email ~ '^[a-z]+[1-5]@fitkit\.com$'
 ON CONFLICT (user_id) DO NOTHING;
 
 WITH demo_users AS (
     SELECT user_id FROM users
-    WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+    WHERE email ~ '^[a-z]+[1-5]@fitkit\.com$'
 ), exercises AS (
     SELECT exercise_id, ROW_NUMBER() OVER (ORDER BY exercise_id) AS position
     FROM Exercise WHERE is_active = TRUE
@@ -81,7 +106,7 @@ SELECT users.user_id, CURRENT_TIMESTAMP - (history.day_no || ' days')::INTERVAL,
        (users.user_id + history.day_no) % 4 = 0
 FROM users
 CROSS JOIN generate_series(1, 30) AS history(day_no)
-WHERE users.email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+WHERE users.email ~ '^[a-z]+[1-5]@fitkit\.com$'
   AND NOT EXISTS (
       SELECT 1 FROM StepEntry existing
       WHERE existing.user_id = users.user_id
@@ -93,7 +118,7 @@ SELECT users.user_id, CURRENT_TIMESTAMP - (history.day_no || ' days')::INTERVAL,
        1200 + ((users.user_id * 137 + history.day_no * 211) % 2601), FALSE
 FROM users
 CROSS JOIN generate_series(1, 30) AS history(day_no)
-WHERE users.email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+WHERE users.email ~ '^[a-z]+[1-5]@fitkit\.com$'
   AND NOT EXISTS (
       SELECT 1 FROM HydrationEntry existing
       WHERE existing.user_id = users.user_id
@@ -109,7 +134,7 @@ SELECT users.user_id, achievements.achievement_id,
        CURRENT_TIMESTAMP - ((users.user_id % 90 + achievements.position * 3) || ' days')::INTERVAL
 FROM users
 JOIN achievements ON achievements.position <= 1 + (users.user_id % 3)
-WHERE users.email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+WHERE users.email ~ '^[a-z]+[1-5]@fitkit\.com$'
 ON CONFLICT (user_id, achievement_id) DO NOTHING;
 
 WITH plans AS (
@@ -125,12 +150,12 @@ FROM users
 CROSS JOIN plan_count count
 JOIN plans ON plans.position = 1 + (users.user_id % count.total)
 WHERE count.total > 0
-  AND users.email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+  AND users.email ~ '^[a-z]+[1-5]@fitkit\.com$'
 ON CONFLICT (user_id, plan_id) DO NOTHING;
 
 WITH ranked AS (
     SELECT user_id, ROW_NUMBER() OVER (ORDER BY email) AS position
-    FROM users WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+    FROM users WHERE email ~ '^[a-z]+[1-5]@fitkit\.com$'
 ), pairs AS (
     SELECT member.user_id, friend.user_id AS friend_id,
            CASE WHEN member.position % 6 = 0 THEN 'Pending' ELSE 'Accepted' END AS status,
@@ -155,7 +180,7 @@ SELECT users.user_id, split_part(users.email, '@', 1),
        users.default_privacy = 'Private',
        CASE users.default_privacy WHEN 'Public' THEN 'Everyone' ELSE 'Friends' END
 FROM users
-WHERE users.email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+WHERE users.email ~ '^[a-z]+[1-5]@fitkit\.com$'
 ON CONFLICT (user_id) DO UPDATE SET
     username = EXCLUDED.username, bio = EXCLUDED.bio, interests = EXCLUDED.interests,
     is_private = EXCLUDED.is_private, dm_policy = EXCLUDED.dm_policy,
@@ -177,12 +202,12 @@ CROSS JOIN LATERAL (SELECT (ARRAY[
     'Tried a new warm-up and moved much better today.',
     'Progress is slow, measurable, and worth celebrating.'
 ])[1 + users.user_id % 8] AS body) messages
-WHERE users.email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+WHERE users.email ~ '^[a-z]+[1-5]@fitkit\.com$'
   AND NOT EXISTS (SELECT 1 FROM SocialPost post WHERE post.user_id=users.user_id AND post.body=messages.body);
 
 WITH ranked AS (
     SELECT user_id, ROW_NUMBER() OVER (ORDER BY email) AS position
-    FROM users WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+    FROM users WHERE email ~ '^[a-z]+[1-5]@fitkit\.com$'
 )
 INSERT INTO FollowRelationship (follower_id, followed_id, status, created_at)
 SELECT follower.user_id, followed.user_id, 'Accepted',
@@ -194,11 +219,11 @@ ON CONFLICT DO NOTHING;
 WITH ranked_posts AS (
     SELECT post_id, user_id, ROW_NUMBER() OVER (ORDER BY created_at, post_id) AS position
     FROM SocialPost WHERE user_id IN (
-        SELECT user_id FROM users WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+        SELECT user_id FROM users WHERE email ~ '^[a-z]+[1-5]@fitkit\.com$'
     )
 ), ranked_users AS (
     SELECT user_id, ROW_NUMBER() OVER (ORDER BY email) AS position
-    FROM users WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+    FROM users WHERE email ~ '^[a-z]+[1-5]@fitkit\.com$'
 )
 INSERT INTO PostLike (post_id, user_id, created_at)
 SELECT post.post_id, liker.user_id, CURRENT_TIMESTAMP - ((post.position % 30) || ' days')::INTERVAL
@@ -210,11 +235,11 @@ ON CONFLICT DO NOTHING;
 WITH ranked_posts AS (
     SELECT post_id, user_id, ROW_NUMBER() OVER (ORDER BY created_at, post_id) AS position
     FROM SocialPost WHERE user_id IN (
-        SELECT user_id FROM users WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+        SELECT user_id FROM users WHERE email ~ '^[a-z]+[1-5]@fitkit\.com$'
     )
 ), ranked_users AS (
     SELECT user_id, ROW_NUMBER() OVER (ORDER BY email) AS position
-    FROM users WHERE email ~ '^[a-z]+\.[a-z]+[0-9]{3}@fitkit\.com$'
+    FROM users WHERE email ~ '^[a-z]+[1-5]@fitkit\.com$'
 )
 INSERT INTO PostComment (post_id, user_id, body, created_at)
 SELECT post.post_id, commenter.user_id, 'Great work - keep the momentum going!',
