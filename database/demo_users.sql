@@ -167,6 +167,45 @@ INSERT INTO Friendship (user_id, friend_id, status, since_date)
 SELECT user_id, friend_id, status, CURRENT_TIMESTAMP - ((position * 4) || ' days')::INTERVAL
 FROM pairs ON CONFLICT DO NOTHING;
 
+WITH ranked_demo_users AS (
+    SELECT user_id, ROW_NUMBER() OVER (ORDER BY email) AS position
+    FROM users
+    WHERE email ~ '^[a-z]+[1-5]@fitkit\.com$'
+), demo_pairs AS (
+    SELECT first_user.user_id AS first_user_id, second_user.user_id AS second_user_id
+    FROM ranked_demo_users first_user
+    JOIN ranked_demo_users second_user ON second_user.position = first_user.position + 1
+    WHERE first_user.position % 2 = 1
+      AND first_user.position < 20
+), demo_messages AS (
+    SELECT first_user_id AS sender_id, second_user_id AS recipient_id,
+        'I kept today''s workout short, but I got it done. What are you training this week?' AS body,
+        4 AS days_ago
+    FROM demo_pairs
+    UNION ALL
+    SELECT second_user_id, first_user_id,
+        'That counts. I am focusing on consistency and adding a little weight when it feels right.', 3
+    FROM demo_pairs
+    UNION ALL
+    SELECT first_user_id, second_user_id,
+        'Good plan. Let me know how the next session goes!', 2
+    FROM demo_pairs
+    UNION ALL
+    SELECT second_user_id, first_user_id,
+        'Will do. Hope your next workout goes well too.', 1
+    FROM demo_pairs
+)
+INSERT INTO DirectMessage (sender_id, recipient_id, body, created_at)
+SELECT message.sender_id, message.recipient_id, message.body,
+    CURRENT_TIMESTAMP - (message.days_ago || ' days')::INTERVAL
+FROM demo_messages message
+WHERE NOT EXISTS (
+    SELECT 1 FROM DirectMessage existing
+    WHERE existing.sender_id = message.sender_id
+      AND existing.recipient_id = message.recipient_id
+      AND existing.body = message.body
+);
+
 INSERT INTO MemberProfile (user_id, username, bio, interests, is_private, dm_policy)
 SELECT users.user_id, split_part(users.email, '@', 1),
        'Training consistently for ' || LOWER(users.primary_goal) || '.',
@@ -186,6 +225,29 @@ ON CONFLICT (user_id) DO UPDATE SET
     is_private = EXCLUDED.is_private, dm_policy = EXCLUDED.dm_policy,
     updated_at = CURRENT_TIMESTAMP;
 
+WITH ranked_demo_profiles AS (
+        SELECT profile.user_id, profile.photo_url, users.profile_photo_url,
+                     ROW_NUMBER() OVER (ORDER BY users.email) AS position
+        FROM MemberProfile profile
+        JOIN users ON users.user_id = profile.user_id
+        WHERE users.email ~ '^[a-z]+[1-5]@fitkit\.com$'
+)
+UPDATE MemberProfile profile
+SET photo_url = 'https://i.pravatar.cc/300?img=' || ranked.position::TEXT
+FROM ranked_demo_profiles ranked
+WHERE profile.user_id = ranked.user_id
+    AND ranked.position <= 20
+    AND ranked.photo_url IS NULL
+    AND ranked.profile_photo_url IS NULL;
+
+UPDATE users
+SET profile_photo_url = profile.photo_url
+FROM MemberProfile profile
+WHERE profile.user_id = users.user_id
+    AND users.profile_photo_url IS NULL
+    AND profile.photo_url IS NOT NULL
+    AND users.email ~ '^[a-z]+[1-5]@fitkit\.com$';
+
 INSERT INTO SocialPost (user_id, body, visibility, created_at, updated_at)
 SELECT users.user_id, messages.body,
        CASE users.default_privacy WHEN 'Public' THEN 'Public' WHEN 'Friends' THEN 'Friends' ELSE 'Private' END,
@@ -204,6 +266,56 @@ CROSS JOIN LATERAL (SELECT (ARRAY[
 ])[1 + users.user_id % 8] AS body) messages
 WHERE users.email ~ '^[a-z]+[1-5]@fitkit\.com$'
   AND NOT EXISTS (SELECT 1 FROM SocialPost post WHERE post.user_id=users.user_id AND post.body=messages.body);
+
+WITH ranked_demo_posts AS (
+    SELECT post.post_id,
+           ROW_NUMBER() OVER (ORDER BY post.created_at, post.post_id) AS position
+    FROM SocialPost post
+    JOIN users ON users.user_id = post.user_id
+    WHERE users.email ~ '^[a-z]+[1-5]@fitkit\.com$'
+)
+UPDATE SocialPost post
+SET image_url = NULL
+FROM ranked_demo_posts ranked
+WHERE post.post_id = ranked.post_id
+    AND ranked.position > 20
+    AND post.image_url = ANY(ARRAY[
+            'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80',
+            'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1200&q=80',
+            'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?auto=format&fit=crop&w=1200&q=80',
+            'https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?auto=format&fit=crop&w=1200&q=80',
+            'https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=1200&q=80',
+            'https://images.unsplash.com/photo-1549060279-7e168fcee0c2?auto=format&fit=crop&w=1200&q=80',
+            'https://images.unsplash.com/photo-1599058917212-d750089bc07d?auto=format&fit=crop&w=1200&q=80',
+            'https://images.unsplash.com/photo-1517963879433-6ad2b056d712?auto=format&fit=crop&w=1200&q=80'
+    ]::TEXT[]);
+
+WITH ranked_demo_posts AS (
+        SELECT post.post_id,
+                     ROW_NUMBER() OVER (ORDER BY post.created_at, post.post_id) AS position
+        FROM SocialPost post
+        JOIN users ON users.user_id = post.user_id
+        WHERE users.email ~ '^[a-z]+[1-5]@fitkit\.com$'
+), post_images AS (
+    SELECT post_id,
+           (ARRAY[
+               'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80',
+               'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1200&q=80',
+               'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?auto=format&fit=crop&w=1200&q=80',
+               'https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?auto=format&fit=crop&w=1200&q=80',
+               'https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=1200&q=80',
+               'https://images.unsplash.com/photo-1549060279-7e168fcee0c2?auto=format&fit=crop&w=1200&q=80',
+               'https://images.unsplash.com/photo-1599058917212-d750089bc07d?auto=format&fit=crop&w=1200&q=80',
+               'https://images.unsplash.com/photo-1517963879433-6ad2b056d712?auto=format&fit=crop&w=1200&q=80'
+           ])[1 + ((position - 1) % 8)] AS image_url
+    FROM ranked_demo_posts
+    WHERE position <= 20
+)
+UPDATE SocialPost post
+SET image_url = post_images.image_url
+FROM post_images
+WHERE post.post_id = post_images.post_id
+  AND post.image_url IS NULL;
 
 WITH ranked AS (
     SELECT user_id, ROW_NUMBER() OVER (ORDER BY email) AS position
@@ -252,4 +364,72 @@ WHERE post.position % 3 = 0 AND commenter.user_id <> post.user_id
       WHERE comment.post_id=post.post_id AND comment.user_id=commenter.user_id
         AND comment.body='Great work - keep the momentum going!'
   );
+
+WITH demo_members AS (
+    SELECT user_id
+    FROM users
+    WHERE email ~ '^[a-z]+[1-5]@fitkit\.com$'
+), post_targets AS (
+    SELECT post.post_id, post.user_id AS owner_id,
+           1 + ((post.post_id * 7 + 3) % 6) AS fire_count,
+           1 + ((post.post_id * 11 + 2) % 7) AS flex_count,
+           1 + ((post.post_id * 13 + 1) % 6) AS clap_count
+    FROM SocialPost post
+    JOIN users ON users.user_id = post.user_id
+    WHERE users.email ~ '^[a-z]+[1-5]@fitkit\.com$'
+), ranked_reactors AS (
+    SELECT target.post_id, target.fire_count, target.flex_count, target.clap_count,
+           member.user_id,
+           ROW_NUMBER() OVER (
+               PARTITION BY target.post_id
+               ORDER BY MD5(target.post_id::TEXT || ':' || member.user_id::TEXT), member.user_id
+           ) AS reactor_position
+    FROM post_targets target
+    CROSS JOIN demo_members member
+    WHERE member.user_id <> target.owner_id
+)
+INSERT INTO FeedReaction (user_id, post_id, reaction_type)
+SELECT reactor.user_id, reactor.post_id,
+       CASE
+           WHEN reactor.reactor_position <= reactor.fire_count THEN 'Fire'
+           WHEN reactor.reactor_position <= reactor.fire_count + reactor.flex_count THEN 'Flex'
+           ELSE 'Clap'
+       END
+FROM ranked_reactors reactor
+WHERE reactor.reactor_position <= reactor.fire_count + reactor.flex_count + reactor.clap_count
+ON CONFLICT (user_id, post_id) DO NOTHING;
+
+WITH demo_members AS (
+    SELECT user_id
+    FROM users
+    WHERE email ~ '^[a-z]+[1-5]@fitkit\.com$'
+), feed_targets AS (
+    SELECT feed.feed_id, feed.user_id AS owner_id,
+           1 + ((feed.feed_id * 7 + 3) % 6) AS fire_count,
+           1 + ((feed.feed_id * 11 + 2) % 7) AS flex_count,
+           1 + ((feed.feed_id * 13 + 1) % 6) AS clap_count
+    FROM ActivityFeed feed
+    JOIN users ON users.user_id = feed.user_id
+    WHERE users.email ~ '^[a-z]+[1-5]@fitkit\.com$'
+), ranked_reactors AS (
+    SELECT target.feed_id, target.fire_count, target.flex_count, target.clap_count,
+           member.user_id,
+           ROW_NUMBER() OVER (
+               PARTITION BY target.feed_id
+               ORDER BY MD5(target.feed_id::TEXT || ':' || member.user_id::TEXT), member.user_id
+           ) AS reactor_position
+    FROM feed_targets target
+    CROSS JOIN demo_members member
+    WHERE member.user_id <> target.owner_id
+)
+INSERT INTO FeedReaction (user_id, feed_id, reaction_type)
+SELECT reactor.user_id, reactor.feed_id,
+       CASE
+           WHEN reactor.reactor_position <= reactor.fire_count THEN 'Fire'
+           WHEN reactor.reactor_position <= reactor.fire_count + reactor.flex_count THEN 'Flex'
+           ELSE 'Clap'
+       END
+FROM ranked_reactors reactor
+WHERE reactor.reactor_position <= reactor.fire_count + reactor.flex_count + reactor.clap_count
+ON CONFLICT (user_id, feed_id) DO NOTHING;
 
