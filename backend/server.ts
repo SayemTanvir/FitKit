@@ -1,5 +1,8 @@
 import express from 'express';
 import cors from 'cors';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import authRoutes from './routes/auth.routes';
 import planRoutes from './routes/plan.routes';
 import exerciseRoutes from './routes/exercise.routes';
@@ -46,11 +49,28 @@ app.use('/api/programmes', programmeRoutes);
 app.use('/api/community', communityRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Catch-all 404 handler with terminal logging
-app.use((req, res) => {
+// Keep missing API routes as JSON instead of returning the frontend shell.
+app.use('/api', (req, res) => {
   console.warn(`[404 MISSING ROUTE] ${req.method} ${req.originalUrl}`);
   res.status(404).json({ error: `API endpoint not found: ${req.method} ${req.originalUrl}` });
 });
+
+// In production the API and the Vite build are served from one origin.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const frontendDist = path.resolve(__dirname, '../dist');
+
+if (process.env.NODE_ENV === 'production' && fs.existsSync(frontendDist)) {
+  app.use(express.static(frontendDist));
+  app.get('/{*splat}', (_req, res) => {
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+} else {
+  app.use((req, res) => {
+    console.warn(`[404 MISSING ROUTE] ${req.method} ${req.originalUrl}`);
+    res.status(404).json({ error: `Route not found: ${req.method} ${req.originalUrl}` });
+  });
+}
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
