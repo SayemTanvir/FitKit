@@ -84,7 +84,8 @@ try {
   if (Number(finished.calories_burned) !== expectedCalories) throw new Error(`Programme calories were ${finished.calories_burned}; expected ${expectedCalories}.`);
   const loadedSession = published.weeks[0].days[2];
   const loadedLog = await call(`/programmes/enrollments/${enrollment.enrollment_id}/sessions/${loadedSession.session_id}`, member.token, 'POST');
-  for (const setNumber of [1, 2]) await call(`/programmes/logs/${loadedLog.log_id}/sets/${prescription.prescription_id}/${setNumber}`, member.token, 'PUT', { actual_reps: 9, actual_load_kg: 20, rpe: 7, completed: true });
+  const loadedPrescription = loadedSession.exercises[0];
+  for (const setNumber of [1, 2]) await call(`/programmes/logs/${loadedLog.log_id}/sets/${loadedPrescription.prescription_id}/${setNumber}`, member.token, 'PUT', { actual_reps: 9, actual_load_kg: 20, rpe: 7, completed: true });
   const loadedFinished = await call(`/programmes/logs/${loadedLog.log_id}/finish`, member.token, 'POST', { notes: 'Loaded session' });
   if (Number(loadedFinished.calories_burned) <= Number(finished.calories_burned)) throw new Error('Added exercise load did not increase programme calories.');
   const summary = await call('/logs/summary', member.token);
@@ -98,6 +99,7 @@ try {
   if (restoredEnrollment.enrollment_id !== enrollment.enrollment_id) throw new Error('Re-enrolling did not restore the existing enrollment.');
   const history = await call(`/programmes/enrollments/${enrollment.enrollment_id}/logs`, member.token);
   if (history[0]?.sets?.length !== 2) throw new Error('Set performance was not persisted.');
+  if (Number(history[0]?.calories_burned) !== Number(loadedFinished.calories_burned) || history[0]?.notes !== 'Loaded session') throw new Error('Completed workout results did not include calories and notes.');
   const progress = await call('/programmes/enrollments', member.token);
   if (progress.find((item) => item.enrollment_id === enrollment.enrollment_id)?.completed_sessions !== 2) throw new Error('Completion progress is wrong.');
   const version2 = await call(`/programmes/${programmeId}/new-version`, admin.token, 'POST');
