@@ -18,11 +18,23 @@ router.get('/summary', verifyToken, async (req: AuthRequest, res: Response) => {
            SELECT SUM(we.calories_burned)
            FROM WorkoutEntry we
            WHERE we.user_id = $1 AND we.logged_at::DATE = CURRENT_DATE
+         ), 0)::numeric + COALESCE((
+           SELECT SUM(sl.calories_burned)
+           FROM WorkoutSessionLog sl
+           JOIN ProgrammeEnrollment pe ON pe.enrollment_id = sl.enrollment_id
+           WHERE pe.user_id = $1 AND sl.status = 'Completed'
+             AND sl.completed_at::DATE = CURRENT_DATE
          ), 0)::numeric AS workout_calories,
          COALESCE((
            SELECT COUNT(*)
            FROM WorkoutEntry we
            WHERE we.user_id = $1 AND we.logged_at::DATE = CURRENT_DATE
+         ), 0)::int + COALESCE((
+           SELECT COUNT(*)
+           FROM WorkoutSessionLog sl
+           JOIN ProgrammeEnrollment pe ON pe.enrollment_id = sl.enrollment_id
+           WHERE pe.user_id = $1 AND sl.status = 'Completed'
+             AND sl.completed_at::DATE = CURRENT_DATE
          ), 0)::int AS workouts_count,
          COALESCE((
            SELECT SUM(se.steps_added)
@@ -92,8 +104,8 @@ router.get('/analytics', verifyToken, async (req: AuthRequest, res: Response) =>
          TO_CHAR(calendar.day::date, 'YYYY-MM-DD') AS activity_date,
          COALESCE(steps.total_steps, 0)::int AS steps,
          COALESCE(hydration.total_water, 0)::int AS hydration,
-         ROUND(COALESCE(steps.step_calories, 0) + COALESCE(workouts.workout_calories, 0))::int AS calories,
-         COALESCE(workouts.workout_count, 0)::int AS workouts
+         ROUND(COALESCE(steps.step_calories, 0) + COALESCE(workouts.workout_calories, 0) + COALESCE(programmes.programme_calories, 0))::int AS calories,
+         (COALESCE(workouts.workout_count, 0) + COALESCE(programmes.session_count, 0))::int AS workouts
        FROM generate_series(
          CURRENT_DATE - ($2::int - 1),
          CURRENT_DATE,
@@ -114,6 +126,13 @@ router.get('/analytics', verifyToken, async (req: AuthRequest, res: Response) =>
          FROM WorkoutEntry
          WHERE user_id = $1 AND logged_at::date = calendar.day::date
        ) workouts ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT SUM(sl.calories_burned) AS programme_calories, COUNT(*) AS session_count
+         FROM WorkoutSessionLog sl
+         JOIN ProgrammeEnrollment pe ON pe.enrollment_id = sl.enrollment_id
+         WHERE pe.user_id = $1 AND sl.status = 'Completed'
+           AND sl.completed_at::date = calendar.day::date
+       ) programmes ON TRUE
        ORDER BY calendar.day`,
       [req.user!.userId, days]
     );

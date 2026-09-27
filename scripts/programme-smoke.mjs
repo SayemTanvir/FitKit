@@ -46,9 +46,10 @@ try {
   await upload(member.token,'programme',403);
   cover=await upload(admin.token,'programme');
   exerciseImage=await upload(admin.token,'exercise');
+  const calorieFactor = 0.3;
   const exercise = await call('/exercises', admin.token, 'POST', {
     name: `Smoke Tempo Squat ${Date.now()}`, category: 'Strength', target_muscle_group: 'Quads',
-    difficulty_level: 'Beginner', tracking_type: 'reps', calorie_factor: 0.3,
+    difficulty_level: 'Beginner', tracking_type: 'reps', calorie_factor: calorieFactor,
     description: 'Disposable integration exercise.', instructions: 'Move with control.', media_url:exerciseImage,
   });
   exerciseId = exercise.exercise_id;
@@ -79,10 +80,26 @@ try {
   for (const setNumber of [1, 2]) await call(`/programmes/logs/${log.log_id}/sets/${prescription.prescription_id}/${setNumber}`, member.token, 'PUT', { actual_reps: 9, actual_load_kg: 0, rpe: 7, completed: true });
   const finished = await call(`/programmes/logs/${log.log_id}/finish`, member.token, 'POST', { notes: 'Good session' });
   if (finished.status !== 'Completed') throw new Error('Workout did not complete.');
+  const expectedCalories = Number((2 * 9 * calorieFactor * (60 / 70)).toFixed(2));
+  if (Number(finished.calories_burned) !== expectedCalories) throw new Error(`Programme calories were ${finished.calories_burned}; expected ${expectedCalories}.`);
+  const loadedSession = published.weeks[0].days[2];
+  const loadedLog = await call(`/programmes/enrollments/${enrollment.enrollment_id}/sessions/${loadedSession.session_id}`, member.token, 'POST');
+  for (const setNumber of [1, 2]) await call(`/programmes/logs/${loadedLog.log_id}/sets/${prescription.prescription_id}/${setNumber}`, member.token, 'PUT', { actual_reps: 9, actual_load_kg: 20, rpe: 7, completed: true });
+  const loadedFinished = await call(`/programmes/logs/${loadedLog.log_id}/finish`, member.token, 'POST', { notes: 'Loaded session' });
+  if (Number(loadedFinished.calories_burned) <= Number(finished.calories_burned)) throw new Error('Added exercise load did not increase programme calories.');
+  const summary = await call('/logs/summary', member.token);
+  if (summary.calories < Number(finished.calories_burned) + Number(loadedFinished.calories_burned)) throw new Error('Programme calories were not included in the daily summary.');
+  await call(`/programmes/enrollments/${enrollment.enrollment_id}`, member.token, 'DELETE');
+  const hiddenEnrollment = await call('/programmes/enrollments', member.token);
+  if (hiddenEnrollment.some((item) => item.enrollment_id === enrollment.enrollment_id)) throw new Error('Removed programme remained in My Programmes.');
+  const summaryAfterRemoval = await call('/logs/summary', member.token);
+  if (summaryAfterRemoval.calories !== summary.calories) throw new Error('Removing a programme erased its workout calories.');
+  const restoredEnrollment = await call(`/programmes/${programmeId}/enroll`, member.token, 'POST');
+  if (restoredEnrollment.enrollment_id !== enrollment.enrollment_id) throw new Error('Re-enrolling did not restore the existing enrollment.');
   const history = await call(`/programmes/enrollments/${enrollment.enrollment_id}/logs`, member.token);
   if (history[0]?.sets?.length !== 2) throw new Error('Set performance was not persisted.');
   const progress = await call('/programmes/enrollments', member.token);
-  if (progress.find((item) => item.enrollment_id === enrollment.enrollment_id)?.completed_sessions !== 1) throw new Error('Completion progress is wrong.');
+  if (progress.find((item) => item.enrollment_id === enrollment.enrollment_id)?.completed_sessions !== 2) throw new Error('Completion progress is wrong.');
   const version2 = await call(`/programmes/${programmeId}/new-version`, admin.token, 'POST');
   if (version2.version_number !== 2 || version2.status !== 'Draft') throw new Error('New version was not created.');
   const stillPublished = await call(`/programmes/${programmeId}`, member.token);

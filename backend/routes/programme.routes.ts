@@ -187,7 +187,7 @@ router.get('/enrollments', requireRole('Member'), async (req: AuthRequest, res: 
             (SELECT COUNT(*)::int FROM WorkoutSessionLog sl WHERE sl.enrollment_id=pe.enrollment_id AND sl.status='Completed') AS completed_sessions
      FROM ProgrammeEnrollment pe JOIN ProgrammeVersion pv ON pv.version_id=pe.version_id
      JOIN TrainingProgramme tp ON tp.programme_id=pv.programme_id
-     WHERE pe.user_id=$1 ORDER BY pe.started_at DESC`, [req.user!.userId]
+    WHERE pe.user_id=$1 AND pe.status <> 'Removed' ORDER BY pe.started_at DESC`, [req.user!.userId]
   );
   return res.json(result.rows);
 });
@@ -204,7 +204,7 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
     item = latest.rowCount ? await loadProgramme(programmeId,latest.rows[0].version_id) : null;
   }
   if (!admin && item) {
-    const enrolled = await query('SELECT 1 FROM ProgrammeEnrollment WHERE user_id=$1 AND version_id=$2',[req.user!.userId,item.version_id]);
+    const enrolled = await query("SELECT 1 FROM ProgrammeEnrollment WHERE user_id=$1 AND version_id=$2 AND status <> 'Removed'",[req.user!.userId,item.version_id]);
     if (!enrolled.rowCount && (item.status !== 'Published' || item.archived_at || item.visibility === 'unlisted')) item = null;
   }
   if (!item) return res.status(404).json({ error: 'Programme not found.' });
@@ -434,26 +434,12 @@ router.patch('/enrollments/:id', requireRole('Member'), async (req: AuthRequest,
 router.delete('/enrollments/:id', requireRole('Member'), async (req: AuthRequest, res: Response) => {
   const enrollmentId = Number(req.params.id);
   if (!Number.isInteger(enrollmentId) || enrollmentId < 1) return res.status(400).json({ error: 'Invalid enrollment ID.' });
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await client.query(
-      'DELETE FROM ProgrammeEnrollment WHERE enrollment_id=$1 AND user_id=$2 RETURNING enrollment_id',
-      [enrollmentId, req.user!.userId]
-    );
-    if (!result.rowCount) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Enrollment not found.' });
-    }
-    await client.query('COMMIT');
-    return res.json({ message: 'Programme removed from your list.' });
-  } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('Remove programme enrollment:', error);
-    return res.status(500).json({ error: 'Could not remove programme.' });
-  } finally {
-    client.release();
-  }
+  const result = await query(
+    "UPDATE ProgrammeEnrollment SET status='Removed' WHERE enrollment_id=$1 AND user_id=$2 AND status <> 'Removed' RETURNING enrollment_id",
+    [enrollmentId, req.user!.userId]
+  );
+  if (!result.rowCount) return res.status(404).json({ error: 'Enrollment not found.' });
+  return res.json({ message: 'Programme removed from your list. Workout history and calories were kept.' });
 });
 
 router.post('/enrollments/:id/sessions/:sessionId', requireRole('Member'), async (req: AuthRequest, res: Response) => {
@@ -518,7 +504,25 @@ router.post('/logs/:id/finish', requireRole('Member'), async (req: AuthRequest, 
      WHERE sl.log_id=$1 AND pe.user_id=$2 AND sl.status='InProgress' AND st.set_log_id IS NULL`, [logId,req.user!.userId]
   );
   if (pending.rows[0].pending>0) return res.status(400).json({ error: `${pending.rows[0].pending} prescribed sets are incomplete.` });
-  const result=await query(`UPDATE WorkoutSessionLog sl SET status='Completed',completed_at=CURRENT_TIMESTAMP,notes=$3 FROM ProgrammeEnrollment pe WHERE sl.log_id=$1 AND sl.enrollment_id=pe.enrollment_id AND pe.user_id=$2 AND sl.status='InProgress' RETURNING sl.*`, [logId,req.user!.userId,String(req.body?.notes||'').slice(0,2000)]);
+  const result=await query(`UPDATE WorkoutSessionLog sl
+    SET status='Completed', completed_at=CURRENT_TIMESTAMP, notes=$3,
+        calories_burned=COALESCE((
+          SELECT ROUND(SUM(
+            COALESCE(e.calorie_factor,1.0) *
+            CASE ep.tracking_type
+              WHEN 'reps' THEN st.actual_reps
+              WHEN 'time' THEN st.duration_seconds
+              WHEN 'distance' THEN st.distance_meters
+            END * (u.weight_kg + COALESCE(st.actual_load_kg,0)) / 70.0
+          ),2)
+          FROM WorkoutSetLog st
+          JOIN ExercisePrescription ep ON ep.prescription_id=st.prescription_id
+          JOIN Exercise e ON e.exercise_id=ep.exercise_id
+          WHERE st.log_id=sl.log_id AND st.completed=TRUE
+        ),0)
+    FROM ProgrammeEnrollment pe JOIN users u ON u.user_id=pe.user_id
+    WHERE sl.log_id=$1 AND sl.enrollment_id=pe.enrollment_id AND pe.user_id=$2 AND sl.status='InProgress'
+    RETURNING sl.*`, [logId,req.user!.userId,String(req.body?.notes||'').slice(0,2000)]);
   if (!result.rowCount) return res.status(404).json({ error: 'Workout not found or already completed.' });
   return res.json(result.rows[0]);
 });

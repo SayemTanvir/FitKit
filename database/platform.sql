@@ -118,11 +118,17 @@ CREATE TABLE IF NOT EXISTS ProgrammeEnrollment (
     enrollment_id SERIAL PRIMARY KEY,
     user_id INT NOT NULL REFERENCES Member(user_id) ON DELETE CASCADE,
     version_id INT NOT NULL REFERENCES ProgrammeVersion(version_id) ON DELETE RESTRICT,
-    status VARCHAR(20) NOT NULL DEFAULT 'Active' CHECK (status IN ('Active','Paused','Completed')),
+    status VARCHAR(20) NOT NULL DEFAULT 'Active' CHECK (status IN ('Active','Paused','Completed','Removed')),
     started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP,
     UNIQUE (user_id, version_id)
 );
+
+ALTER TABLE ProgrammeEnrollment
+    DROP CONSTRAINT IF EXISTS programmeenrollment_status_check;
+ALTER TABLE ProgrammeEnrollment
+    ADD CONSTRAINT programmeenrollment_status_check
+    CHECK (status IN ('Active','Paused','Completed','Removed'));
 
 CREATE TABLE IF NOT EXISTS WorkoutSessionLog (
     log_id SERIAL PRIMARY KEY,
@@ -131,9 +137,13 @@ CREATE TABLE IF NOT EXISTS WorkoutSessionLog (
     status VARCHAR(20) NOT NULL DEFAULT 'InProgress' CHECK (status IN ('InProgress','Completed')),
     started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP,
+    calories_burned NUMERIC(8,2) NOT NULL DEFAULT 0 CHECK (calories_burned >= 0),
     notes TEXT NOT NULL DEFAULT '',
     UNIQUE (enrollment_id, session_id)
 );
+
+ALTER TABLE WorkoutSessionLog
+    ADD COLUMN IF NOT EXISTS calories_burned NUMERIC(8,2) NOT NULL DEFAULT 0 CHECK (calories_burned >= 0);
 
 CREATE TABLE IF NOT EXISTS WorkoutSetLog (
     set_log_id SERIAL PRIMARY KEY,
