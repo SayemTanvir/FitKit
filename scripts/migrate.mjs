@@ -29,6 +29,8 @@ try {
   await pool.query(sql);
   const platform = await readFile(new URL('../database/platform.sql', import.meta.url), 'utf8');
   await pool.query(platform);
+  const catalogSeed = await readFile(new URL('../database/catalog_seed.sql', import.meta.url), 'utf8');
+  await pool.query(catalogSeed);
   const demoUsers = await readFile(new URL('../database/demo_users.sql', import.meta.url), 'utf8');
   await pool.query(demoUsers);
   const procedures = await readFile(new URL('../database/procedures.sql', import.meta.url), 'utf8');

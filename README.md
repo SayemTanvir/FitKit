@@ -69,6 +69,10 @@ The seed also creates 100 varied demo members with usernames such as
 plan assignments, friendships, profiles, posts, follows, likes and comments
 across 10 countries.
 
+The catalogue includes 30 base exercises and seven additional published
+programmes covering general fitness, strength, fat loss, mobility, hypertrophy,
+endurance and athletic conditioning.
+
 | Role | Email |
 | --- | --- |
 | Admin | `admin@fitkit.com` |

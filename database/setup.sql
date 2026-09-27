@@ -7,6 +7,7 @@
 \ir views.sql
 \ir insert.sql
 \ir platform.sql
+\ir catalog_seed.sql
 \ir demo_users.sql
 \ir procedures.sql
 
