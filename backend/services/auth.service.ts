@@ -32,6 +32,7 @@ interface UpdateProfileDTO {
   daily_step_goal?: number;
   daily_calorie_goal?: number;
   daily_hydration_goal?: number;
+  show_on_public_leaderboard?: boolean;
 }
 
 export async function registerMemberService(data: RegisterMemberDTO) {
@@ -172,6 +173,7 @@ export async function getUserProfileService(userId: number) {
        m.daily_step_goal,
        m.daily_calorie_goal,
        m.daily_hydration_goal,
+       m.show_on_public_leaderboard,
        a.admin_role,
        COALESCE(a.can_manage_admins,FALSE) AS can_manage_admins,
        CASE WHEN a.user_id IS NOT NULL THEN 'Admin' ELSE 'Member' END AS role,
@@ -262,12 +264,14 @@ export async function updateUserProfileService(
       `UPDATE Member
        SET daily_step_goal = $1,
            daily_calorie_goal = $2,
-           daily_hydration_goal = $3
-       WHERE user_id = $4`,
+           daily_hydration_goal = $3,
+           show_on_public_leaderboard = COALESCE($4, show_on_public_leaderboard)
+       WHERE user_id = $5`,
       [
         data.daily_step_goal,
         data.daily_calorie_goal,
         data.daily_hydration_goal,
+        data.show_on_public_leaderboard,
         userId,
       ]
     );

@@ -100,6 +100,7 @@ expectOk(await request('/auth/me', token, {
     daily_step_goal: profile.daily_step_goal,
     daily_calorie_goal: profile.daily_calorie_goal,
     daily_hydration_goal: profile.daily_hydration_goal,
+    show_on_public_leaderboard: profile.show_on_public_leaderboard,
   }),
 }), 'Profile update');
 

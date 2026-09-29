@@ -91,6 +91,7 @@ CREATE TABLE Member (
         CHECK (daily_calorie_goal > 0),
     daily_hydration_goal INT NOT NULL DEFAULT 2800
         CHECK (daily_hydration_goal > 0),
+    show_on_public_leaderboard BOOLEAN NOT NULL DEFAULT TRUE,
     is_rest_mode BOOLEAN NOT NULL DEFAULT FALSE,
     CONSTRAINT fk_member_user
         FOREIGN KEY (user_id)

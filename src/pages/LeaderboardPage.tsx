@@ -55,7 +55,7 @@ export default function LeaderboardPage() {
     <div className="max-w-5xl space-y-6">
       <div className="glass rounded-2xl p-6 sm:p-8">
         <div className="flex items-center gap-3"><Trophy className="w-7 h-7 text-lime-300" /><h1 className="font-display font-semibold text-2xl text-white">Community Leaderboard</h1></div>
-        <p className="text-sm text-slate-400 mt-2">Compare member activity using public logs only. Private workouts and steps never count here.</p>
+        <p className="text-sm text-slate-400 mt-2">Compare opted-in members using public logs only. Private logs and members who hide their leaderboard profile never count here.</p>
       </div>
 
       <div className="glass rounded-2xl p-5 grid sm:grid-cols-2 xl:grid-cols-5 gap-4">

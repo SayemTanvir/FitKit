@@ -47,6 +47,7 @@ SELECT
 FROM users u
 JOIN Member m ON u.user_id = m.user_id
 LEFT JOIN StepEntry s ON u.user_id = s.user_id AND s.is_public = TRUE
+WHERE m.show_on_public_leaderboard = TRUE
 GROUP BY u.user_id, u.name;
 
 -- 3. Comprehensive Exercise Catalog View

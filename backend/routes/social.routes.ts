@@ -43,6 +43,7 @@ router.get('/leaderboard', verifyToken, async (req: AuthRequest, res: Response) 
              AND ($1::int IS NULL OR logged_at::date >= CURRENT_DATE - ($1::int - 1))
          ) w ON TRUE
          WHERE ($2 = 'All' OR u.fitness_level = $2)
+           AND m.show_on_public_leaderboard = TRUE
            AND ($6::char(2) IS NULL OR u.country_id = $6)
            AND ($4 = 'all' OR u.user_id = $5 OR EXISTS (
              SELECT 1 FROM FriendRequest f

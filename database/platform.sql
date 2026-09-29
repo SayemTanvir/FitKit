@@ -245,6 +245,20 @@ FROM TrainingProgramme tp WHERE tp.programme_id=pv.programme_id AND pv.status='P
 
 -- Social network extension. Health metrics remain exclusively in private user tables.
 ALTER TABLE Notification ADD COLUMN IF NOT EXISTS link_path TEXT;
+ALTER TABLE Member ADD COLUMN IF NOT EXISTS show_on_public_leaderboard BOOLEAN NOT NULL DEFAULT TRUE;
+
+-- Keep the legacy database view aligned with the filterable API leaderboard.
+CREATE OR REPLACE VIEW view_global_leaderboard AS
+SELECT
+    u.user_id,
+    u.name,
+    COALESCE(SUM(s.steps_added), 0) AS total_public_steps,
+    RANK() OVER (ORDER BY COALESCE(SUM(s.steps_added), 0) DESC) AS global_rank
+FROM users u
+JOIN Member m ON u.user_id = m.user_id
+LEFT JOIN StepEntry s ON u.user_id = s.user_id AND s.is_public = TRUE
+WHERE m.show_on_public_leaderboard = TRUE
+GROUP BY u.user_id, u.name;
 
 -- Step milestones only enter the public activity feed with explicit consent.
 CREATE OR REPLACE FUNCTION trg_fn_check_step_goal()

@@ -134,6 +134,12 @@ Legacy plans are converted into published programme versions where possible. Exi
 | POST | `/api/social/feed/:id/reaction` | Member |
 | GET | `/api/health` | Public |
 
+Members can set **Public leaderboard visibility** in Profile Settings. Choosing
+**Private** excludes the account and all of its activity from public leaderboard
+results; individual log visibility still controls which logs can contribute when
+the account is opted in. Existing accounts remain opted in until they change this
+setting.
+
 Newer API groups:
 
 | Prefix | Key actions | Access |

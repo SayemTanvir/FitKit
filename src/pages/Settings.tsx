@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
-import { Save, Target, UserRound } from 'lucide-react';
+import { Save, ShieldCheck, Target, UserRound } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fetchCountries, fetchMyProfile, updateMyProfile, setMyPhoto, removeMyPhoto } from '../services/api';
 import ImageUploadField from '../components/ImageUploadField';
@@ -18,6 +18,7 @@ const emptyForm = {
   daily_step_goal: 10000,
   daily_calorie_goal: 800,
   daily_hydration_goal: 2800,
+  show_on_public_leaderboard: true,
 };
 
 type NumericField = 'height_cm' | 'weight_kg' | 'daily_step_goal' | 'daily_calorie_goal' | 'daily_hydration_goal';
@@ -56,13 +57,14 @@ export default function Settings() {
           daily_step_goal: Number(user.daily_step_goal || 10000),
           daily_calorie_goal: Number(user.daily_calorie_goal || 800),
           daily_hydration_goal: Number(user.daily_hydration_goal || 2800),
+          show_on_public_leaderboard: user.show_on_public_leaderboard !== false,
         });
       })
       .catch((error) => setLoadError(error.message || 'Could not load settings'))
       .finally(() => setLoading(false));
   }, []);
 
-  const updateField = (name: keyof typeof form, value: string | number) => {
+  const updateField = (name: keyof typeof form, value: string | number | boolean) => {
     setForm((previous) => ({ ...previous, [name]: value }));
   };
 
@@ -140,6 +142,22 @@ export default function Settings() {
             <Field label="Calories (kcal)"><input type="number" min="100" step="50" value={form.daily_calorie_goal} onChange={(e) => updateNumberField('daily_calorie_goal', e.target.value)} className="input-pro" required /></Field>
             <Field label="Hydration (ml)"><input type="number" min="500" step="100" value={form.daily_hydration_goal} onChange={(e) => updateNumberField('daily_hydration_goal', e.target.value)} className="input-pro" required /></Field>
           </div>
+        </div>
+      )}
+
+      {['Member','Admin'].includes(role) && (
+        <div className="glass rounded-2xl p-6 sm:p-8">
+          <div className="flex items-center gap-3 mb-6">
+            <span className="w-10 h-10 rounded-xl bg-violet-400/10 text-violet-300 flex items-center justify-center"><ShieldCheck className="w-5 h-5" /></span>
+            <div><h2 className="font-display font-semibold text-xl text-white">Leaderboard Privacy</h2><p className="text-sm text-slate-400">Choose whether your account and public activity contribute to community rankings.</p></div>
+          </div>
+          <Field label="Public leaderboard visibility">
+            <select value={form.show_on_public_leaderboard ? 'public' : 'private'} onChange={(e) => updateField('show_on_public_leaderboard', e.target.value === 'public')} className="input-pro">
+              <option value="public">Public — include me in rankings</option>
+              <option value="private">Private — exclude me from rankings</option>
+            </select>
+          </Field>
+          {!form.show_on_public_leaderboard && <p className="mt-3 text-xs leading-5 text-violet-200">Your profile will not appear and none of your activity will count in the public leaderboard. This does not delete your logs.</p>}
         </div>
       )}
 

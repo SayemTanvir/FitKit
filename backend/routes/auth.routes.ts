@@ -186,6 +186,7 @@ router.put('/me', verifyToken, async (req: AuthRequest, res: Response) => {
     daily_step_goal,
     daily_calorie_goal,
     daily_hydration_goal,
+    show_on_public_leaderboard,
   } = req.body || {};
 
   const validGender = gender === 'Male' || gender === 'Female';
@@ -196,8 +197,9 @@ router.put('/me', verifyToken, async (req: AuthRequest, res: Response) => {
       (value) => Number.isInteger(Number(value)) && Number(value) > 0
     );
   const countryId = String(country_id || '').trim().toUpperCase() || null;
+  const validLeaderboardPreference = show_on_public_leaderboard === undefined || typeof show_on_public_leaderboard === 'boolean';
 
-  if (!String(name || '').trim() || !isValidBirthDate(birth_date) || !validGender || !validLevel || !positiveNumbers || !validMemberGoals || (countryId && !/^[A-Z]{2}$/.test(countryId))) {
+  if (!String(name || '').trim() || !isValidBirthDate(birth_date) || !validGender || !validLevel || !positiveNumbers || !validMemberGoals || !validLeaderboardPreference || (countryId && !/^[A-Z]{2}$/.test(countryId))) {
     return res.status(400).json({ error: 'Invalid profile, birth date (age 16+), or goal values.' });
   }
 
@@ -218,6 +220,7 @@ router.put('/me', verifyToken, async (req: AuthRequest, res: Response) => {
       daily_step_goal: Number(daily_step_goal),
       daily_calorie_goal: Number(daily_calorie_goal),
       daily_hydration_goal: Number(daily_hydration_goal),
+      show_on_public_leaderboard,
     });
     return res.status(200).json(profile);
   } catch (err: any) {

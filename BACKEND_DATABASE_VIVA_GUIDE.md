@@ -234,7 +234,7 @@ Trigger order insight: workout calorie calculation must happen before insertion,
 ### Views (`database/views.sql`)
 
 - `view_daily_member_summary`: builds the set of activity dates per user, then uses lateral aggregate subqueries for steps, workouts, and hydration. `COALESCE` converts missing aggregates from null to zero.
-- `view_global_leaderboard`: aggregates public steps and uses the window function `RANK()` without collapsing the result further.
+- `view_global_leaderboard`: includes only members whose `show_on_public_leaderboard` preference is true, aggregates their public steps, and uses the window function `RANK()` without collapsing the result further.
 - `view_exercise_catalog`: reconstructs the supertype/subtype hierarchy and derives category using subtype existence.
 
 A view stores a query definition, not ordinary copied data. These are regular views, not materialized views, so results are current but computation happens when queried.
@@ -270,7 +270,7 @@ A view stores a query definition, not ordinary copied data. These are regular vi
 - `GET /api/auth/me`: complete own profile and achievement catalogue.
 - `PUT/DELETE /api/auth/me/photo`: verifies uploaded-media ownership, synchronizes duplicate photo fields, deletes replaced owned bytes.
 - `GET /api/auth/profile/:id`: privacy/block/follow/friend-aware reduced public profile.
-- `PUT /api/auth/me`: validates profile/goals/country and updates base + Member records.
+- `PUT /api/auth/me`: validates profile/goals/country/leaderboard preference and updates base + Member records.
 
 ### Exercise routes
 
@@ -299,7 +299,7 @@ A view stores a query definition, not ordinary copied data. These are regular vi
 
 ### Social routes
 
-- Leaderboard aggregates only public entries, supports time/level/country/friend filters, chooses a metric with `CASE`, and ranks with `DENSE_RANK`.
+- Leaderboard excludes members who disabled public leaderboard visibility, then aggregates only public entries, supports time/level/country/friend filters, chooses a metric with `CASE`, and ranks with `DENSE_RANK`.
 - Activity feed uses keyset pagination on `(created_at, feed_id)` instead of offset. The encoded cursor is opaque to the client, and the ID tie-breaker prevents equal timestamps from skipping/duplicating rows.
 - Reaction aggregation uses filtered counts. A member has at most one reaction per target; sending the same reaction toggles it off, another type changes it.
 

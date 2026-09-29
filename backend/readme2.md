@@ -31,7 +31,7 @@
 
 ## 7. Show analytics and SQL features
 - Dashboard: daily activity totals, goals and progress history.
-- Complex query examples: daily totals across activity tables; a ranked, aggregated public leaderboard; the exercise catalogue joined to its exercise subtypes.
+- Complex query examples: daily totals across activity tables; an opt-in ranked leaderboard aggregated from public logs; the exercise catalogue joined to its exercise subtypes.
 - Database functions: calculated water goal and membership rank.
 - Point to the SQL views, functions and query examples used for these results.
 

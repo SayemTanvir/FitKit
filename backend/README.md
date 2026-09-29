@@ -161,7 +161,7 @@
 - POST /logs/:id/finish — marks a workout session log as completed.
 
 ## routes/social.routes.ts
-- GET /leaderboard — returns filtered leaderboard rankings.
+- GET /leaderboard — returns filtered rankings for members who opted in; only their public logs contribute.
 - GET ['/', '/feed'] — fetches the social activity feed with pagination.
 - POST /feed/:id/reaction — toggles a reaction on a feed item.
 
