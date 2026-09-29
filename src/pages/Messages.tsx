@@ -63,7 +63,15 @@ export function Conversation() {
   return <div className="max-w-3xl space-y-4">
     <div className="glass rounded-2xl p-5"><Link to="/messages" className="text-xs text-cyan-300">← Conversations</Link><div className="flex items-center gap-3 mt-2"><UserAvatar name={other?.name || 'Conversation'} photoUrl={other?.photo_url}/><h1 className="font-display text-xl font-semibold text-white">{other?.name || 'Conversation'}</h1></div></div>
     {error && <p role="alert" className="text-red-300">{error}</p>}
-    <div className="glass rounded-2xl p-5 h-[55vh] overflow-y-auto space-y-3">{!items.length && <p className="text-sm text-slate-400">No messages yet.</p>}{items.map((item) => <div key={item.message_id} className={`max-w-[85%] rounded-xl p-3 text-sm ${item.sender_id === currentId ? 'ml-auto bg-lime-400/15 text-lime-50' : 'bg-white/10 text-slate-200'} ${item.message_id < 0 ? 'opacity-70' : ''}`}><p className="whitespace-pre-wrap">{item.body}</p><p className="text-[10px] opacity-60 mt-1">{item.message_id < 0 ? 'Sending…' : formatBangladeshDateTime(item.created_at)}</p></div>)}</div>
+    <div className="glass rounded-2xl p-3 sm:p-5 h-[55vh] overflow-y-auto space-y-2">{!items.length && <p className="text-sm text-slate-400">No messages yet.</p>}{items.map((item) => {
+      const sentByMe = item.sender_id === currentId;
+      return <div key={item.message_id} className={`flex ${sentByMe ? 'justify-end' : 'justify-start'}`}>
+        <div className={`w-fit min-w-0 max-w-[85%] sm:max-w-[72%] rounded-2xl px-3.5 py-2.5 text-sm shadow-sm ${sentByMe ? 'rounded-br-md bg-lime-400/15 text-lime-50' : 'rounded-bl-md bg-white/10 text-slate-200'} ${item.message_id < 0 ? 'opacity-70' : ''}`}>
+          <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{item.body}</p>
+          <p className={`mt-1 text-[10px] leading-tight opacity-60 ${sentByMe ? 'text-right' : 'text-left'}`}>{item.message_id < 0 ? 'Sending…' : formatBangladeshDateTime(item.created_at)}</p>
+        </div>
+      </div>;
+    })}</div>
     <form onSubmit={send} className="glass rounded-2xl p-4 flex gap-2"><input required maxLength={4000} value={text} onChange={(e) => setText(e.target.value)} placeholder="Write a message..." className="input-pro flex-1" /><button disabled={busy} className="btn-primary rounded-xl px-5 text-sm font-semibold disabled:opacity-50">Send</button></form>
   </div>;
 }
