@@ -1,189 +1,339 @@
-# FitKit
+<div align="center">
+  <img src="./src/assets/fitkit-logo.png" alt="FitKit logo" width="120" />
 
-FitKit is a React/TypeScript, Express, and PostgreSQL fitness platform. The original DBMS-project plans and logs remain available; the newer programme and community workflows use persistent, permission-checked API data.
+  # FitKit
 
-## Core features
+  **A full-stack fitness, workout planning, and community platform**
 
-- Member registration and JWT login
-- Admin and Member roles represented by subtype tables
-- Exercise catalogue with Strength, Cardio, and Flexibility subtypes
-- Admin plan creation followed by exercise scheduling; members can start multiple plans
-- Member workout logging with ownership checks
-- Step and hydration logging
-- Daily goals, seven-day analytics, and editable health profile
-- Workout-plan activation and progress tracking
-- Community feed with persistent reactions and member profiles
-- Public-activity leaderboard filtered by metric, time period, and fitness level
-- Daily aggregate dashboard and per-user notifications
-- Database-triggered calorie calculation and public activity feed
-- Membership ranks and achievements
-- Admin exercise library, multiweek programme builder, publication/versioning, and archive/restore
-- Member programme enrollment, set-by-set workout logging, pause/resume, and progress history
-- Member discovery, public/private profiles, separate follows and friendships, posts, comments, direct messages, and notifications
-- Blocking, reporting, moderation queue, account suspension, and a database-backed admin overview
+  Plan training programmes, track daily activity, measure progress, and connect
+  with a fitness community—all in one place.
 
-## Requirements
+  [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev/)
+  [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+  [![Express](https://img.shields.io/badge/Express-5-000000?logo=express&logoColor=white)](https://expressjs.com/)
+  [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+  [![Node.js](https://img.shields.io/badge/Node.js-22.12+-5FA04E?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+</div>
 
-- Node.js 20 or newer
-- PostgreSQL 14 or newer
-- `psql` available on the command line, or a PostgreSQL client such as pgAdmin
+---
 
-## Setup
+## Overview
 
-1. Install dependencies:
+FitKit is a database-driven fitness application built with React, Express, and
+PostgreSQL. It combines personal activity tracking and structured workout
+programmes with social features such as profiles, posts, leaderboards, direct
+messages, and moderation.
 
-   ```bash
-   npm install
-   ```
+The application supports two roles:
 
-2. Create a PostgreSQL database named `FitKitDB`.
+- **Members** discover programmes, log workouts and daily activity, monitor
+  progress, and interact with the community.
+- **Admins** manage exercises and versioned programmes, moderate reported
+  content, and view platform statistics.
 
-3. Copy `.env.example` to `backend/.env` and set your PostgreSQL password and JWT secret.
+## Features
 
-4. Run the canonical database setup from the project root:
+### Training and progress
 
-   ```bash
-   psql -U postgres -d FitKitDB -f database/setup.sql
-   ```
+- Multi-week programme catalogue with enrollment, pause, and resume workflows
+- Set-by-set workout logging with session history
+- Workout, step, and hydration tracking
+- Daily goals and seven-day progress analytics
+- Exercise library for strength, cardio, and flexibility activities
+- Achievements, membership ranks, and fitness-level leaderboards
 
-5. Start the API and frontend together:
+### Community
 
-   ```bash
-   npm run dev
-   ```
+- Public or private member profiles and activity visibility controls
+- Member discovery, follows, friendships, and blocking
+- Posts, comments, likes, and activity-feed reactions
+- Persistent one-to-one messaging and notifications
+- Reporting, account suspension, and an admin moderation queue
 
-The frontend runs on `http://localhost:5173` and the API runs on `http://localhost:5000`.
-The frontend proxies `/api` requests to the API during development. If needed,
-`npm run dev:api` and `npm run dev:web` start the services separately.
-Open `/api/health` to check whether the API can reach PostgreSQL. If the API
-reports a database error, verify `backend/.env` and that PostgreSQL is running.
-The API requires `JWT_SECRET`; set a long, unique value. `WEB_ORIGIN` controls the browser origin allowed by CORS.
+### Administration and data
+
+- Exercise catalogue management
+- Programme drafting, publication, versioning, archiving, and restoration
+- Database-backed admin overview
+- PostgreSQL views, functions, procedures, and triggers
+- Automatic calorie calculations and activity-feed generation
+- Seeded demonstration data for development and presentations
+
+## Tech stack
+
+| Layer | Technology |
+| --- | --- |
+| Frontend | React 19, TypeScript, Vite, React Router, Tailwind CSS |
+| Backend | Node.js, Express 5, TypeScript, JWT, bcrypt |
+| Database | PostgreSQL, `pg` connection pooling |
+| UI utilities | Lucide React, React Hot Toast, React Virtuoso |
+| Quality | TypeScript project references, Oxlint, smoke tests |
+| Deployment | Render-compatible single-service configuration |
+
+## Architecture
+
+```text
+Browser
+  │
+  ├── React + Vite frontend
+  │      └── /api requests
+  │
+  └── Express REST API
+         ├── JWT authentication and role checks
+         ├── Route-level validation and privacy checks
+         └── PostgreSQL
+                ├── relational schema and indexes
+                ├── views and stored procedures
+                └── functions and triggers
+```
+
+In development, Vite serves the frontend and proxies `/api` to Express. In
+production, Express serves the compiled frontend and API from one origin.
+
+## Getting started
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) **22.12 or newer**
+- npm
+- [PostgreSQL](https://www.postgresql.org/) **14 or newer**, locally or through
+  a hosted provider such as Supabase
+- `psql` on your command line, or another PostgreSQL client capable of running
+  SQL files
+
+### 1. Clone and install
+
+```bash
+git clone https://github.com/SayemTanvir/FitKit.git
+cd FitKit
+npm install
+```
+
+### 2. Configure the environment
+
+Copy the example file to `backend/.env`:
+
+```bash
+# macOS/Linux
+cp .env.example backend/.env
+```
+
+```powershell
+# Windows PowerShell
+Copy-Item .env.example backend/.env
+```
+
+Then update the values for your PostgreSQL instance:
+
+```env
+PORT=5000
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=FitKitDB
+DB_USER=postgres
+DB_PASSWORD=your_database_password
+DB_SSL=false
+APP_TIME_ZONE=Asia/Dhaka
+JWT_SECRET=replace_with_a_long_random_secret
+WEB_ORIGIN=http://localhost:5173
+```
+
+> The committed `.env.example` is pre-shaped for a hosted Supabase connection.
+> For local PostgreSQL, use values similar to the example above and set
+> `DB_SSL=false`. Never commit `backend/.env`.
+
+| Variable | Purpose |
+| --- | --- |
+| `PORT` | Express server port; defaults to `5000` |
+| `DB_HOST` | PostgreSQL hostname |
+| `DB_PORT` | PostgreSQL port; normally `5432` |
+| `DB_NAME` | Database name |
+| `DB_USER` | Database user |
+| `DB_PASSWORD` | Database password |
+| `DB_SSL` | Enables SSL when set to `true` |
+| `APP_TIME_ZONE` | Application time zone used by migration tooling |
+| `JWT_SECRET` | Secret used to sign authentication tokens |
+| `WEB_ORIGIN` | Allowed browser origin; accepts comma-separated origins |
+
+### 3. Create and seed the database
+
+Create an empty database, then run the canonical setup script from the project
+root:
+
+```bash
+createdb -U postgres FitKitDB
+psql -U postgres -d FitKitDB -f database/setup.sql
+```
+
+If the database already exists, omit the `createdb` command. The setup script
+creates the schema, database logic, views, catalogue, procedures, and demo data.
+
+### 4. Start the application
+
+```bash
+npm run dev
+```
+
+Open the following addresses:
+
+| Service | URL |
+| --- | --- |
+| Web application | <http://localhost:5173> |
+| API health check | <http://localhost:5000/api/health> |
+
+A successful health check returns:
+
+```json
+{ "status": "ok", "database": "connected" }
+```
 
 ## Demo accounts
 
-The original admin and member accounts use the password `Password@123`.
+The seed data includes ready-to-use accounts:
 
-The seed also creates 100 varied demo members with usernames such as
-`aisha1@fitkit.com`. Every one of these demo members uses the password
-`12345678`. They include historical workouts, steps, hydration, achievements,
-plan assignments, friendships, profiles, posts, follows, likes and comments
-across 10 countries.
+| Role | Email | Password |
+| --- | --- | --- |
+| Admin | `admin@fitkit.com` | `Password@123` |
+| Member | `member@fitkit.com` | `Password@123` |
+| Demo members | `aisha1@fitkit.com` and other seeded users | `12345678` |
 
-The catalogue includes 30 base exercises and seven additional published
-programmes covering general fitness, strength, fat loss, mobility, hypertrophy,
-endurance and athletic conditioning.
+The dataset contains 100 fictional members across 10 countries, historical
+activity, social relationships, achievements, exercises, and published
+programmes. Change or remove all demo credentials before deploying a real
+instance.
 
-| Role | Email |
+## Available commands
+
+| Command | Description |
 | --- | --- |
-| Admin | `admin@fitkit.com` |
-| Member | `member@fitkit.com` |
+| `npm run dev` | Start the frontend and API together in watch mode |
+| `npm run dev:web` | Start only the Vite frontend |
+| `npm run dev:api` | Start only the Express API |
+| `npm run build` | Type-check and create the production frontend build |
+| `npm run start:api` | Start the API without watch mode |
+| `npm run typecheck` | Type-check frontend and backend projects |
+| `npm run lint` | Run Oxlint |
+| `npm run preview` | Preview the production frontend build |
+| `npm run migrate:existing` | Upgrade an older FitKit database |
 
-The platform migration enriches the seeded demo members with community data and
-adds a two-week training programme. Change or remove demo credentials before any
-non-demo deployment. The seed is repeatable and does not overwrite an existing
-user with the same email.
+## Database workflow
 
-## Database files
+For a **new, empty database**, run only `database/setup.sql`. It applies the
+database files in this order:
 
-Run SQL through `database/setup.sql`. It applies files in this order:
+1. `schema.sql` — tables, relationships, constraints, and indexes
+2. `functions.sql` — stored and trigger functions
+3. `triggers.sql` — validation, calorie calculation, and feed automation
+4. `views.sql` — summaries, leaderboards, and catalogue views
+5. `insert.sql` — core seed data
+6. `platform.sql` — programme and community schema additions
+7. `catalog_seed.sql` — expanded exercise and programme catalogue
+8. `demo_users.sql` — fictional member and activity data
+9. `procedures.sql` — stored procedures
 
-1. `schema.sql` — tables, keys, constraints, and indexes
-2. `functions.sql` — stored functions and trigger functions
-3. `triggers.sql` — age validation, calorie calculation, and feed automation
-4. `views.sql` — daily summary, leaderboard, and exercise catalogue views
-5. `insert.sql` — repeatable sample data
-
-6. `platform.sql` — additive programme/social schema, legacy-plan conversion, privacy repair, and fictional demo data
-
-`queries.sql` contains demonstration queries for the DBMS presentation.
-
-If you already have a local FitKit database from an older version, do not run
-`setup.sql` again. Apply the repeatable compatibility migration after pulling
-these changes; it also categorizes the older exercise names for plan curation:
+For a database created by an older FitKit version, do **not** rerun
+`database/setup.sql`. Configure `backend/.env`, then use:
 
 ```bash
 npm run migrate:existing
 ```
 
-`npm run migrate:existing` reads `backend/.env` and applies both compatibility and platform migrations. Do not use the old `psql -f database/migrate_existing.sql` command by itself: it does not apply `platform.sql`.
+This repeatable migration preserves existing plans and workout logs, converts
+legacy plans into versioned programmes where possible, and applies the current
+platform, catalogue, demo-data, and procedure updates.
 
-Legacy plans are converted into published programme versions where possible. Existing plan rows and workout logs are retained. New enrollments point to a specific published version; a later draft or publication cannot rewrite recorded sets.
+## API overview
 
-## Main API routes
+All protected endpoints expect a JWT bearer token. Role and ownership checks
+are enforced by the API rather than only by the user interface.
 
-| Method | Route | Access |
+| Prefix | Main responsibility | Typical access |
 | --- | --- | --- |
-| POST | `/api/auth/register` | Public |
-| POST | `/api/auth/login` | Public |
-| GET | `/api/auth/me` | Authenticated |
-| PUT | `/api/auth/me` | Authenticated |
-| GET | `/api/auth/profile/:id` | Authenticated |
-| GET | `/api/exercises` | Authenticated |
-| GET | `/api/plans` | Authenticated |
-| POST, PUT, DELETE | `/api/plans` | Admin |
-| POST | `/api/plans/:id/exercises` | Admin |
-| DELETE | `/api/plans/:id/exercises/:exerciseId/:day` | Admin |
-| POST | `/api/plans/:id/start` | Member |
-| GET, POST, DELETE | `/api/logs/workout` | Member |
-| GET, POST, DELETE | `/api/logs/steps` | Member |
-| GET, POST, DELETE | `/api/logs/hydration` | Member |
-| GET | `/api/logs/summary` | Authenticated |
-| GET | `/api/logs/analytics?days=7` | Member |
-| GET | `/api/social/feed` | Authenticated |
-| GET | `/api/social/leaderboard` | Authenticated |
-| POST | `/api/social/feed/:id/reaction` | Member |
-| GET | `/api/health` | Public |
+| `/api/auth` | Registration, login, profiles, and account settings | Public / authenticated |
+| `/api/exercises` | Exercise catalogue and administration | Authenticated / admin writes |
+| `/api/plans` | Legacy workout-plan compatibility workflow | Member / admin by action |
+| `/api/logs` | Workout, step, hydration, summary, and analytics data | Member |
+| `/api/programmes` | Programme creation, publication, enrollment, and set logs | Member / admin by action |
+| `/api/social` | Activity feed, reactions, and leaderboard | Authenticated |
+| `/api/community` | Profiles, relationships, posts, messages, notifications, and reports | Authenticated |
+| `/api/admin` | Platform overview and role administration | Admin |
+| `/api/health` | API and database availability | Public |
 
-Members can set **Public leaderboard visibility** in Profile Settings. Choosing
-**Private** excludes the account and all of its activity from public leaderboard
-results; individual log visibility still controls which logs can contribute when
-the account is opted in. Existing accounts remain opted in until they change this
-setting.
+## Project structure
 
-Newer API groups:
-
-| Prefix | Key actions | Access |
-| --- | --- | --- |
-| `/api/programmes` | Browse, create/edit draft, save weekly structure, publish, version, archive, enroll, log sets and finish sessions | Member / Admin by action |
-| `/api/exercises` | Create/edit/archive exercise-library entries | Admin writes |
-| `/api/community/members` | Discovery, profiles, follows, friendships, blocks | Member writes |
-| `/api/community/posts` | Feed, posts, likes and comments | Privacy checked |
-| `/api/community/messages` | Persistent one-to-one messages and read state | Member |
-| `/api/community/notifications` | Notification centre and read state | Authenticated |
-| `/api/community/reports`, `/api/community/moderation` | Reports and moderation actions | Member / Admin |
-| `/api/admin/overview` | Database-backed platform counts | Admin |
-
-The member UI is under **Explore Programmes**, **My Programmes**, **Community**, **Messages**, and **Notifications**. Admins have **Programme Studio**, **Exercise Library**, **Moderation**, and the overview dashboard. The older plan interface remains reachable for compatibility, but the new builder is the primary authoring flow.
+```text
+FitKit/
+├── backend/
+│   ├── controllers/       # Request controllers
+│   ├── db/                # PostgreSQL connection pool
+│   ├── middleware/        # Authentication and role authorization
+│   ├── routes/            # REST API routes
+│   ├── services/          # Shared backend business logic
+│   └── server.ts          # Express entry point
+├── database/              # Schema, migrations, database logic, and seeds
+├── public/                # Static browser assets
+├── scripts/               # Development, migration, and smoke-test scripts
+├── src/
+│   ├── assets/            # Frontend images
+│   ├── components/        # Reusable React components
+│   ├── pages/             # Route-level application views
+│   ├── services/          # API clients and frontend services
+│   └── App.tsx            # Application routing
+├── .env.example           # Environment configuration template
+├── render.yaml            # Render deployment blueprint
+└── vite.config.ts         # Vite and development proxy configuration
+```
 
 ## Verification
+
+Run the static checks and production build before opening a pull request:
 
 ```bash
 npm run typecheck
 npm run lint
 npm run build
+```
+
+With the API running against the seeded database, the integration smoke suites
+can also be run:
+
+```bash
 node scripts/smoke.mjs
 node scripts/programme-smoke.mjs
 node scripts/community-smoke.mjs
 npx tsx --tsconfig tsconfig.app.json scripts/avatar-smoke.tsx
 ```
 
-Run the smoke test while the API is running with the seeded demo accounts. It
-creates and removes disposable plan/log/member records, and checks the main
-authenticated API flows and role restrictions.
-The additional smoke suites create disposable accounts/records to exercise multiweek publication, historical version integrity, workout results, privacy, relationships, messaging and moderation. They require the running API, migrated database and seeded admin account.
+These tests create and remove disposable records while checking authentication,
+role restrictions, programme versioning, logging, privacy, relationships,
+messaging, and moderation workflows.
 
-## Current boundaries
+## Current limitations
 
-- Messaging is persistent and uses short polling, not WebSockets. Typing indicators and attachments are not implemented.
-- Profile, post, programme-cover and exercise images can be uploaded as JPEG, PNG, WebP or GIF (maximum 3 MB) into PostgreSQL `MediaAsset`; HTTPS URLs remain supported for existing content. Uploaded media is served through authenticated, access-checked API routes. Use only media you own or are licensed to display. There is no server-side resizing or compression service; unlinked abandoned uploads currently require maintenance cleanup.
-- The builder supports explicit save, repeated week copying, deload marking and per-week prescriptions. It does not yet offer reusable workout-template management, scheduled publication, programme assignment, or advanced supersets/circuits.
-- Set logging, completion and history are database-backed. There is no automatic calendar-based skipped-day rescheduling or comprehensive programme analytics yet.
-- Basic in-process spam limits protect sensitive endpoints, but multi-instance production deployments need a shared rate-limit store. Deployment also requires HTTPS, managed secret storage, backups, observability and an operational moderation policy.
+- Direct messages use short polling rather than WebSockets; typing indicators
+  and attachments are not available.
+- Uploaded JPEG, PNG, WebP, and GIF images are limited to 3 MB and stored in
+  PostgreSQL without server-side resizing or compression.
+- The programme builder does not yet support reusable workout templates,
+  scheduled publication, assignments, supersets, or circuits.
+- Programme history is persistent, but calendar-based rescheduling and advanced
+  programme analytics are not yet implemented.
+- Rate limiting is process-local. Multi-instance production deployments need a
+  shared rate-limit store, managed secrets, backups, monitoring, and HTTPS.
 
-## Project structure
+## Deployment
 
-```text
-backend/       Express routes, authentication, and PostgreSQL access
-database/      Canonical schema, functions, triggers, views, and seed data
-src/           React frontend
-```
+`render.yaml` defines a Render web service that builds the React application and
+runs the Express API. For another production environment:
+
+1. Run `npm run build`.
+2. Set `NODE_ENV=production` and all required database/JWT variables.
+3. Run `npm run start:api`.
+
+Express will serve both the files in `dist/` and the `/api` routes.
+
+---
+
+<div align="center">
+  Built as a full-stack DBMS project with React, Express, and PostgreSQL.
+</div>
