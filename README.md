@@ -34,11 +34,11 @@ The application supports two roles:
 ## Project showcase
 
 <div align="center">
-  <a href="https://github.com/SayemTanvir/FitKit/raw/main/docs/media/fitkit-showcase.mp4">
-    <img src="./docs/media/fitkit-showcase-cover.png" alt="Watch the FitKit project showcase" width="900" />
+  <a href="https://www.youtube.com/watch?v=ZQAcNebwrPo">
+    <img src="./docs/media/fitkit-youtube-thumbnail.jpg" alt="Watch the FitKit project showcase on YouTube" width="900" />
   </a>
 
-  **[▶ Watch the 90-second FitKit showcase](https://github.com/SayemTanvir/FitKit/raw/main/docs/media/fitkit-showcase.mp4)**
+  **[▶ Watch the 90-second FitKit showcase on YouTube](https://www.youtube.com/watch?v=ZQAcNebwrPo)**
 </div>
 
 The walkthrough covers authentication, structured workout programmes, the
