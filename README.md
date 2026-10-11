@@ -34,7 +34,7 @@ The application supports two roles:
 ## Project showcase
 
 <div align="center">
-  <a href="https://www.youtube.com/watch?v=ZQAcNebwrPo">
+  <a href="https://www.youtube.com/watch?v=o5Z6adWxCGY">
     <img src="./docs/media/fitkit-youtube-thumbnail.jpg" alt="Watch the FitKit project showcase on YouTube" width="900" />
   </a>
 
