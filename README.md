@@ -34,11 +34,11 @@ The application supports two roles:
 ## Project showcase
 
 <div align="center">
-  <a href="https://www.youtube.com/watch?v=o5Z6adWxCGY">
+  <a href="https://youtu.be/o5Z6adWxCGY">
     <img src="./docs/media/fitkit-youtube-thumbnail.jpg" alt="Watch the FitKit project showcase on YouTube" width="900" />
   </a>
 
-  **[▶ Watch the 90-second FitKit showcase on YouTube](https://www.youtube.com/watch?v=ZQAcNebwrPo)**
+  **[▶ Watch the 90-second FitKit showcase on YouTube](https://youtu.be/o5Z6adWxCGY)**
 </div>
 
 The walkthrough covers authentication, structured workout programmes, the
